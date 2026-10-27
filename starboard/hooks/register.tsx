@@ -1,35 +1,35 @@
 import { atom, read, update } from 'claude-code'
 import type { Register } from 'claude-code'
 
-import type { SidebarRow, SidebarSection, SidebarStatus } from '../types'
+import type { StarboardRow, StarboardSection, StarboardStatus } from '../types'
 
-const PANE = 'sidebar'
-const sections = atom({ plugin: 'sidebar', key: 'sections' } as const, {})
-const collapsed = atom({ plugin: 'sidebar', key: 'collapsed' } as const, {})
+const PANE = 'starboard'
+const sections = atom({ plugin: 'starboard', key: 'sections' } as const, {})
+const collapsed = atom({ plugin: 'starboard', key: 'collapsed' } as const, {})
 
-const MARKS: Record<SidebarStatus, { mark: string; color: string }> = {
+const MARKS: Record<StarboardStatus, { mark: string; color: string }> = {
   ok: { mark: '●', color: 'success' },
   warn: { mark: '●', color: 'warning' },
   error: { mark: '●', color: 'error' },
   off: { mark: '○', color: 'inactive' },
 }
 
-export const sortSections = (all: Record<string, SidebarSection>): SidebarSection[] =>
+export const sortSections = (all: Record<string, StarboardSection>): StarboardSection[] =>
   Object.values(all).sort((a, b) => (a.order ?? 100) - (b.order ?? 100) || a.title.localeCompare(b.title))
 
 export const register: Register = on => {
-  // `$.sidebar` is a noun: each call raises `sidebar.publish` / `sidebar.remove`, answered below with our own `$`.
+  // `$.starboard` is a noun: each call raises `starboard.publish` / `starboard.remove`, answered below with our own `$`.
   on('engine.create', async ($, e, next) => {
     const built = await next(e)
-    return { ...built, sidebar: { publish: async () => {}, remove: async () => {} } }
+    return { ...built, starboard: { publish: async () => {}, remove: async () => {} } }
   })
 
-  on('sidebar.publish', async ($, section) => {
+  on('starboard.publish', async ($, section) => {
     await update($, sections, all => ({ ...all, [section.id]: section }))
     return { value: undefined }
   })
 
-  on('sidebar.remove', async ($, id) => {
+  on('starboard.remove', async ($, id) => {
     await update($, sections, all => {
       const { [id]: _, ...rest } = all
       return rest
@@ -38,13 +38,13 @@ export const register: Register = on => {
   })
 
   on('session.start', async ($, e, next) => {
-    await $.command.register({ name: 'sidebar', description: 'Ouvre le panneau latéral des mods' })
-    void $.ui.open({ id: PANE, title: 'Sidebar' })
+    await $.command.register({ name: 'starboard', description: 'Ouvre le panneau latéral des mods' })
+    void $.ui.open({ id: PANE, title: 'Starboard' })
     return next(e)
   })
 
-  on('command.run', { command: 'sidebar' }, async $ => {
-    await $.ui.open({ id: PANE, title: 'Sidebar' })
+  on('command.run', { command: 'starboard' }, async $ => {
+    await $.ui.open({ id: PANE, title: 'Starboard' })
     return { text: 'Panneau latéral ouvert.' }
   })
 
@@ -53,7 +53,7 @@ export const register: Register = on => {
     const list = sortSections(await read($, sections))
     const folded = await read($, collapsed)
 
-    const row = (one: SidebarRow) => {
+    const row = (one: StarboardRow) => {
       const status = one.status && MARKS[one.status]
       return (
         <Box flexDirection="row" gap={1}>

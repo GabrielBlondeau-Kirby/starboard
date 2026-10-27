@@ -2,7 +2,7 @@
   "name": "starboard",
   "owner": { "name": "Gabriel Blondeau" },
   "plugins": [
-    { "name": "sidebar", "source": "./sidebar", "description": "Panneau latéral qui regroupe les sections publiées par d'autres mods" },
-    { "name": "workspace-info", "source": "./workspace-info", "description": "Section branche, worktree et ticket Jira (footer sans sidebar)" }
+    { "name": "starboard", "source": "./starboard", "description": "Panneau latéral qui regroupe les sections publiées par d'autres mods" },
+    { "name": "workspace-info", "source": "./workspace-info", "description": "Section branche, worktree et ticket Jira (footer sans starboard)" }
   ]
 }

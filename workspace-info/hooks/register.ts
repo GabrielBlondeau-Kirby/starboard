@@ -1,9 +1,9 @@
 import type { EngineInterface as Engine, Register } from 'claude-code'
 
-// The sidebar's contract, kept local: the mod does not depend on `sidebar`, it only uses it when present.
-type SidebarRow = { label?: string; value: string; status?: 'ok' | 'warn' | 'error' | 'off'; dim?: boolean }
-type SidebarSection = { id: string; title: string; order?: number; rows: SidebarRow[] }
-type WithSidebar = Engine & { sidebar: { publish: (section: SidebarSection) => Promise<void> } }
+// The starboard contract, kept local: the mod does not depend on `starboard`, it only uses it when present.
+type StarboardRow = { label?: string; value: string; status?: 'ok' | 'warn' | 'error' | 'off'; dim?: boolean }
+type StarboardSection = { id: string; title: string; order?: number; rows: StarboardRow[] }
+type WithStarboard = Engine & { starboard: { publish: (section: StarboardSection) => Promise<void> } }
 
 const SECTION = 'workspace-info'
 const POLL_MS = 15000
@@ -16,7 +16,7 @@ async function git($: Engine, args: string[]) {
   return exitCode === 0 ? stdout.trim() : undefined
 }
 
-export async function describeWorkspace($: Engine): Promise<SidebarRow[]> {
+export async function describeWorkspace($: Engine): Promise<StarboardRow[]> {
   const top = await git($, ['rev-parse', '--show-toplevel'])
   if (!top) return [{ value: 'pas un dépôt git', status: 'off', dim: true }]
 
@@ -33,14 +33,14 @@ export async function describeWorkspace($: Engine): Promise<SidebarRow[]> {
   ]
 }
 
-export const footerOf = (rows: SidebarRow[]): string =>
+export const footerOf = (rows: StarboardRow[]): string =>
   rows.filter(row => !row.dim).map(row => row.value).join(' · ') || rows[0]?.value || ''
 
 async function refresh($: Engine) {
   const rows = await describeWorkspace($)
   try {
-    // Without the sidebar mod `$.sidebar` is absent and the call throws: fall back to the footer.
-    await ($ as WithSidebar).sidebar.publish({ id: SECTION, title: 'Contexte', order: 10, rows })
+    // Without the starboard mod `$.starboard` is absent and the call throws: fall back to the footer.
+    await ($ as WithStarboard).starboard.publish({ id: SECTION, title: 'Contexte', order: 10, rows })
   } catch {
     $.ui.status(footerOf(rows))
   }
