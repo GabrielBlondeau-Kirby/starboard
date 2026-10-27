@@ -123,4 +123,4 @@ Règles proposées pour les contributeurs :
 - [ ] Section Docker (`docker ps --filter name=hap-<branche>`)
 - [ ] Migrer session-link : résumé dans le panneau, graphe dans son propre panneau
 - [ ] Récupérer le titre du ticket Jira
-- [ ] Publier sur GitHub (compte personnel)
+- [x] Publier sur GitHub : github.com/GabrielBlondeau-Kirby/starboard

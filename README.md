@@ -1,7 +1,7 @@
 # starboard
 
 Un panneau latéral pour Claude Code dans lequel d'autres mods publient leur section (contexte git, Docker, sessions…), au lieu d'occuper le footer ou d'ouvrir chacun leur propre panneau.
-n> *Starboard* : tribord, le côté droit du navire — là où le panneau s'ancre.
+> *Starboard* : tribord, le côté droit du navire — là où le panneau s'ancre.
 
 | Mod | Rôle |
 | --- | --- |
