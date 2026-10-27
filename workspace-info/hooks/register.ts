@@ -2,7 +2,7 @@ import type { EngineInterface as Engine, Register } from 'claude-code'
 
 // The starboard contract, kept local: the mod does not depend on `starboard`, it only uses it when present.
 type StarboardRow = { label?: string; value: string; status?: 'ok' | 'warn' | 'error' | 'off'; dim?: boolean }
-type StarboardSection = { id: string; title: string; order?: number; rows: StarboardRow[] }
+type StarboardSection = { id: string; title: string; order?: number; summary?: string; rows: StarboardRow[] }
 type WithStarboard = Engine & { starboard: { publish: (section: StarboardSection) => Promise<void> } }
 
 const SECTION = 'workspace-info'
@@ -40,7 +40,7 @@ async function refresh($: Engine) {
   const rows = await describeWorkspace($)
   try {
     // Without the starboard mod `$.starboard` is absent and the call throws: fall back to the footer.
-    await ($ as WithStarboard).starboard.publish({ id: SECTION, title: 'Contexte', order: 10, rows })
+    await ($ as WithStarboard).starboard.publish({ id: SECTION, title: 'Contexte', order: 10, summary: rows.find(row => row.label === 'jira' && !row.dim)?.value, rows })
   } catch {
     $.ui.status(footerOf(rows))
   }

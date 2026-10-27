@@ -53,31 +53,40 @@ export const register: Register = on => {
     const list = sortSections(await read($, sections))
     const folded = await read($, collapsed)
 
+    // Mirrors the desktop app's own sidebar: one rounded card per section, the title with its caret,
+    // a summary on the right of the header, each row's value flush right.
     const row = (one: StarboardRow) => {
       const status = one.status && MARKS[one.status]
       return (
-        <Box flexDirection="row" gap={1}>
-          {status && <Text color={status.color}>{status.mark}</Text>}
-          {one.label && <Text dimColor>{one.label}</Text>}
+        <Box flexDirection="row" justifyContent="space-between" gap={1}>
+          <Box flexDirection="row" gap={1} flexShrink={0}>
+            {status && <Text color={status.color}>{status.mark}</Text>}
+            {one.label && <Text dimColor>{one.label}</Text>}
+          </Box>
           <Text dimColor={one.dim} wrap="truncate-end">{one.value}</Text>
         </Box>
       )
     }
 
     return (
-      <Box flexDirection="column" gap={1}>
+      <Box flexDirection="column" gap="sm">
         {list.length === 0 && <Text dimColor>Aucune section publiée pour l'instant.</Text>}
         {list.map(section => {
           const isFolded = folded[section.id] === true
           return (
-            <Box flexDirection="column">
-              <Button
-                key={`toggle-${section.id}`}
-                plain
-                onPress={() => update($, collapsed, all => ({ ...all, [section.id]: !isFolded }))}
-              >
-                <Text bold>{isFolded ? '▸' : '▾'} {section.title}</Text>
-              </Button>
+            <Box flexDirection="column" borderStyle="round" borderColor="subtle" paddingX={1} gap="xs">
+              <Box flexDirection="row" justifyContent="space-between" gap={1}>
+                <Button
+                  key={`toggle-${section.id}`}
+                  plain
+                  label={section.title}
+                  onPress={() => update($, collapsed, all => ({ ...all, [section.id]: !isFolded }))}
+                >
+                  <Text weight="semibold">{section.title}</Text>
+                  <Text dimColor> {isFolded ? '▸' : '▾'}</Text>
+                </Button>
+                {section.summary && <Text dimColor wrap="truncate-end">{section.summary}</Text>}
+              </Box>
               {!isFolded && section.rows.map(row)}
               {!isFolded && section.note && <Text dimColor>{section.note}</Text>}
             </Box>

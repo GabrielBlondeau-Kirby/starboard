@@ -12,6 +12,8 @@ export type StarboardSection = {
   title: string
   order?: number
   rows: StarboardRow[]
+  /** Short text on the right of the header, shown folded or not ("11 %", "2 actifs"). */
+  summary?: string
   note?: string
 }
 
