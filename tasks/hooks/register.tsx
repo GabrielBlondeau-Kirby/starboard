@@ -29,7 +29,7 @@ const TODO_HEADING = /(^|[^\p{L}])(todo|to-do|tasks?|backlog|[àa] faire)([^\p{L
 
 export function splitTitle(text: string): { title: string; body: string } {
   const bold = /^\*\*(.+?)\*\*\s*(.*)$/.exec(text)
-  if (bold) return { title: bold[1].replace(/[.:]$/, ''), body: bold[2] }
+  if (bold) return { title: (bold[1] ?? '').replace(/[.:]$/, ''), body: bold[2] ?? '' }
   const stop = text.search(/[.:]\s/)
   return stop > 0 ? { title: text.slice(0, stop), body: text.slice(stop + 2) } : { title: text, body: '' }
 }
@@ -47,22 +47,22 @@ export function parseTasks(text: string, source: string, first = 1): Task[] {
     const heading = HEADING.exec(line)
     if (heading) {
       close()
-      isTodoSection = TODO_HEADING.test(heading[1])
+      isTodoSection = TODO_HEADING.test(heading[1] ?? '')
       return
     }
     const bullet = BULLET.exec(line)
-    const indent = bullet ? bullet[1].length : 0
+    const indent = (bullet?.[1] ?? '').length
     const hasBox = bullet?.[2] !== undefined
     if (bullet && (hasBox || (isTodoSection && indent === 0))) {
       close()
-      const { title, body } = splitTitle(bullet[3].trim())
+      const { title, body } = splitTitle((bullet[3] ?? '').trim())
       const task: Task = { n: first + tasks.length, source, line: index, done: /x/i.test(bullet[2] ?? ''), title, body, hasBox }
       tasks.push(task)
       open = { task, indent, rest: [] }
       return
     }
     // An item's wrapped lines sit indented under its bullet; a blank line or a dedent ends it.
-    const lead = /^\s*/.exec(line)![0].length
+    const lead = line.length - line.trimStart().length
     if (open && line.trim() && lead > open.indent) open.rest.push(line.trim())
     else close()
   })
@@ -105,7 +105,7 @@ async function resolveSources($: Engine): Promise<string[]> {
   const files: string[] = []
   for (const path of named) {
     const stat = await $.fs.stat(path).catch(() => undefined)
-    if (stat?.kind === 'directory') {
+    if (stat?.kind === 'dir') {
       const entries = await $.fs.list(path)
       files.push(...entries.filter(e => e.kind === 'file' && /\.md$/i.test(e.name)).map(e => `${path.replace(/[\\/]$/, '')}/${e.name}`))
     } else if (stat) files.push(path)
@@ -263,9 +263,9 @@ export const register: Register = on => {
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.props.hasSurvey) return next(e)
     const open = openOf(await read($, list))
-    if (!open.length) return next(e)
+    const [first] = open
+    if (!first) return next(e)
     const { Box, Text, Button } = $.ui.resolve(e)
-    const first = open[0]
     return (
       <Box flexDirection="row" gap={1}>
         <Text dimColor>Tasks · {open.length} open · next</Text>

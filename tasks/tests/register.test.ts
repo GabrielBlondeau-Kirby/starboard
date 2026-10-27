@@ -21,7 +21,7 @@ test('the format: boxes, bold titles, wrapped lines', async () => {
     [2, false, 'Chapters: a zoomed preview'],
     [3, false, 'Short durations'],
   ])
-  expect(tasks[1].body).toBe('Around the playhead, to place a cut to the second.')
+  expect(tasks[1]?.body).toBe('Around the playhead, to place a cut to the second.')
 })
 
 test('plain bullets count only under a to-do heading', async () => {
@@ -42,15 +42,20 @@ test('ticking keeps the line and adds a missing box', async () => {
 // The engine hands hooks absolute paths, under the test's working directory (the mod folder).
 const rel = (path: string) => path.replace(/\\/g, '/').replace(/^.*\/dev-mods\/[^/]+\/tasks\/?/, '').replace(/\/$/, '')
 
-function memoryFs(on: Parameters<Parameters<typeof test>[1]>[1], files: Record<string, string>) {
+type Body = Extract<Parameters<typeof test>[1], (...args: never[]) => unknown>
+type On = Parameters<Body>[1]
+
+function memoryFs(on: On, files: Record<string, string>) {
   const missing = () => Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
   on('fs.list', (_, e) => {
     const dir = rel(e.path)
     const names = Object.keys(files).filter(p => (dir ? p.startsWith(`${dir}/`) : true) && !p.slice(dir ? dir.length + 1 : 0).includes('/'))
-    return { value: names.map(p => ({ name: p.split('/').pop()!, kind: 'file' as const, size: files[p].length, mtimeMs: 0, isLink: false })) }
+    return { value: names.map(p => ({ name: p.split('/').pop()!, kind: 'file' as const, size: files[p]?.length ?? 0, mtimeMs: 0, isLink: false })) }
   })
   on('fs.stat', (_, e) => {
-    const file = files[rel(e.path)]
+    const path = rel(e.path)
+    if (Object.keys(files).some(p => p.startsWith(`${path}/`))) return { value: { kind: 'dir' as const, size: 0, mtimeMs: 0, isLink: false } }
+    const file = files[path]
     if (file === undefined) throw missing()
     return { value: { kind: 'file' as const, size: file.length, mtimeMs: 0, isLink: false } }
   })
@@ -73,14 +78,34 @@ test('/todo finds docs/A-FAIRE.md, ticks and adds in it', async ($, on) => {
   on('session.start', (_, e) => ({ cwd: e.cwd }))
 
   await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
+  // The testing kit types $.command.run with the engine's full input; the mod only reads rgs.
+  const todo = (args: string) => $.command.run({ command: 'todo', args } as never)
 
-  const listed = await $.command.run({ command: 'todo', args: '' })
+  const listed = await todo('')
   expect(listed.text).toContain('docs/A-FAIRE.md — 2 open')
   expect(listed.text).toContain('#2 [ ] Chapters: a zoomed preview')
 
-  await $.command.run({ command: 'todo', args: 'done 2' })
-  expect(files['docs/A-FAIRE.md'].split('\n')[3]).toBe('- [x] **Chapters: a zoomed preview.** Around the playhead,')
+  await todo('done 2')
+  expect(files['docs/A-FAIRE.md']?.split('\n')[3]).toBe('- [x] **Chapters: a zoomed preview.** Around the playhead,')
 
-  await $.command.run({ command: 'todo', args: 'add Remove the CLI line' })
-  expect(files['docs/A-FAIRE.md'].trimEnd().split('\n').at(-1)).toBe('- [ ] Remove the CLI line')
+  await todo('add Remove the CLI line')
+  expect(files['docs/A-FAIRE.md']?.trimEnd().split('\n').at(-1)).toBe('- [ ] Remove the CLI line')
+})
+
+test('/todo source takes a folder for its Markdown files', async ($, on) => {
+  const files: Record<string, string> = { 'notes/a.md': '- [ ] **One.**', 'notes/b.md': '- [ ] **Two.**', 'notes/c.txt': '- [ ] no' }
+  memoryFs(on, files)
+  on('command.register', (_, e) => ({ value: { command: e.name } }))
+  on('clock.every', () => ({ value: undefined }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+
+  await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
+  const todo = (args: string) => $.command.run({ command: 'todo', args } as never)
+
+  await todo('source notes')
+  expect(files['.claude/todo.json']).toContain('"notes"')
+  const listed = await todo('')
+  expect(listed.text).toContain('#1 [ ] One')
+  expect(listed.text).toContain('#2 [ ] Two')
+  expect(listed.text).not.toContain('c.txt')
 })
