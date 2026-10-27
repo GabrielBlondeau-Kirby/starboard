@@ -48,7 +48,7 @@ Contrat :
 
 | Type | Champs |
 | --- | --- |
-| `StarboardSection` | `id`, `title`, `order?` (tri, défaut 100), `rows`, `note?` |
+| `StarboardSection` | `id`, `title`, `order?` (tri, défaut 100), `summary?` (à droite du titre), `rows`, `note?` |
 | `StarboardRow` | `label?`, `value`, `status?`, `dim?` |
 | `StarboardStatus` | `ok` (vert), `warn` (jaune), `error` (rouge), `off` (vide) |
 

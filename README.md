@@ -45,3 +45,7 @@ async function refresh($: Engine) {
 ```
 
 Le contrat complet est dans `starboard/types/index.d.ts`, la conception dans `docs/conception.md`.
+
+## Licence
+
+MIT — voir [LICENSE](LICENSE).
