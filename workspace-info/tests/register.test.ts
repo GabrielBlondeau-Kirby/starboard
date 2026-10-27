@@ -7,7 +7,7 @@ const GIT: Record<string, string> = {
   'status --porcelain': '',
 }
 
-test('without the sidebar mod, the workspace goes to the footer', async ($, on) => {
+test('without the starboard mod, the workspace goes to the footer', async ($, on) => {
   const statuses: (string | undefined)[] = []
   on('process.run', (_, e) => ({ value: { exitCode: 0, stdout: GIT[e.argv.slice(1).join(' ')] ?? '', stderr: '' } }))
   on('clock.every', () => ({ value: { cancel: () => {} } }))

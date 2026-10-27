@@ -1,4 +1,4 @@
-# Sidebar pour Claude Code : récapitulatif de la discussion
+# Starboard pour Claude Code : récapitulatif de la discussion
 
 27 octobre 2026. Doc détaillée : https://claude.ai/artifact/SDXw2DbpZPx9Ug69MqMKpx (privée tant qu'elle n'est pas partagée).
 
@@ -23,10 +23,10 @@ Placement d'un panneau :
 
 ## 2. L'idée : un panneau commun, une section par mod
 
-Au lieu que chaque mod ait son panneau ou une ligne dans le footer, un mod hôte `sidebar` affiche un panneau unique. Les autres mods y publient leur section (des mini-panneaux empilés et repliables).
+Au lieu que chaque mod ait son panneau ou une ligne dans le footer, un mod hôte `starboard` affiche un panneau unique. Les autres mods y publient leur section (des mini-panneaux empilés et repliables).
 
 ```
-┌─ Sidebar ───────────────────┐
+┌─ Starboard ───────────────────┐
 │ ▾ Contexte                  │  ← workspace-info
 │   ● branche  feature/PAY-12 │
 │     worktree hap-pay-12 (lié)
@@ -40,38 +40,38 @@ Exemples de sections envisagés : session-link (actuellement dans le footer), br
 
 ## 3. Comment ça marche
 
-- `sidebar` ajoute un objet `$.sidebar` à l'API des mods, avec deux méthodes : `publish(section)` et `remove(id)`.
-- Chaque appel devient un événement (`sidebar.publish`) que l'hôte intercepte pour ranger la section dans son `$.state`. L'écriture redessine le panneau automatiquement.
+- `starboard` ajoute un objet `$.starboard` à l'API des mods, avec deux méthodes : `publish(section)` et `remove(id)`.
+- Chaque appel devient un événement (`starboard.publish`) que l'hôte intercepte pour ranger la section dans son `$.state`. L'écriture redessine le panneau automatiquement.
 - **Les sections passent des données, pas des composants** (un argument d'événement doit rester une valeur simple). Conséquence : le graphe interactif de session-link ne peut pas aller tel quel dans le panneau.
 
 Contrat :
 
 | Type | Champs |
 | --- | --- |
-| `SidebarSection` | `id`, `title`, `order?` (tri, défaut 100), `rows`, `note?` |
-| `SidebarRow` | `label?`, `value`, `status?`, `dim?` |
-| `SidebarStatus` | `ok` (vert), `warn` (jaune), `error` (rouge), `off` (vide) |
+| `StarboardSection` | `id`, `title`, `order?` (tri, défaut 100), `rows`, `note?` |
+| `StarboardRow` | `label?`, `value`, `status?`, `dim?` |
+| `StarboardStatus` | `ok` (vert), `warn` (jaune), `error` (rouge), `off` (vide) |
 
-## 4. Sidebar facultatif
+## 4. Starboard facultatif
 
-Demande : un mod doit fonctionner normalement si l'utilisateur n'a pas `sidebar`.
+Demande : un mod doit fonctionner normalement si l'utilisateur n'a pas `starboard`.
 
-- `plugin.json` ne propose pas de dépendance optionnelle (une dépendance déclarée est obligatoire). Le mod de section ne déclare donc **pas** `sidebar`.
-- Il copie le contrat en local, appelle `$.sidebar.publish(...)` dans un `try`, et dans le `catch` utilise son affichage de base (footer, bande ou panneau dédié).
-- Le validateur refuse `if ($.sidebar)` ou `const s = $.sidebar` : il faut appeler la méthode directement.
-- Le coût : si le contrat de `sidebar` change, les copies locales doivent être mises à jour à la main. Règle proposée : n'ajouter que des champs optionnels, et passer à une version majeure pour tout changement cassant.
+- `plugin.json` ne propose pas de dépendance optionnelle (une dépendance déclarée est obligatoire). Le mod de section ne déclare donc **pas** `starboard`.
+- Il copie le contrat en local, appelle `$.starboard.publish(...)` dans un `try`, et dans le `catch` utilise son affichage de base (footer, bande ou panneau dédié).
+- Le validateur refuse `if ($.starboard)` ou `const s = $.starboard` : il faut appeler la méthode directement.
+- Le coût : si le contrat de `starboard` change, les copies locales doivent être mises à jour à la main. Règle proposée : n'ajouter que des champs optionnels, et passer à une version majeure pour tout changement cassant.
 
 ```ts
 import type { EngineInterface as Engine, Register } from 'claude-code'
 
-type SidebarRow = { label?: string; value: string; status?: 'ok' | 'warn' | 'error' | 'off'; dim?: boolean }
-type SidebarSection = { id: string; title: string; order?: number; rows: SidebarRow[] }
-type WithSidebar = Engine & { sidebar: { publish: (section: SidebarSection) => Promise<void> } }
+type StarboardRow = { label?: string; value: string; status?: 'ok' | 'warn' | 'error' | 'off'; dim?: boolean }
+type StarboardSection = { id: string; title: string; order?: number; rows: StarboardRow[] }
+type WithStarboard = Engine & { starboard: { publish: (section: StarboardSection) => Promise<void> } }
 
 async function refresh($: Engine) {
-  const rows: SidebarRow[] = [{ label: 'état', value: 'tout va bien', status: 'ok' }]
+  const rows: StarboardRow[] = [{ label: 'état', value: 'tout va bien', status: 'ok' }]
   try {
-    await ($ as WithSidebar).sidebar.publish({ id: 'mon-mod', title: 'Mon mod', order: 30, rows })
+    await ($ as WithStarboard).starboard.publish({ id: 'mon-mod', title: 'Mon mod', order: 30, rows })
   } catch {
     $.ui.status(rows.map(row => row.value).join(' · '))
   }
@@ -90,15 +90,15 @@ export const register: Register = on => {
 
 | Mod | Rôle | État |
 | --- | --- | --- |
-| `sidebar` | Hôte : `$.sidebar`, panneau, commande `/sidebar`, repli des sections | Validé, chargé et vu en session (à droite) |
-| `workspace-info` | Section « Contexte » : branche (jaune si modifs non commitées), worktree (« lié » si secondaire), ticket Jira tiré du nom de branche ; rafraîchi toutes les 15 s ; footer si pas de sidebar | Validé ; cas sans sidebar couvert par un test |
+| `starboard` | Hôte : `$.starboard`, panneau, commande `/starboard`, repli des sections | Validé, chargé et vu en session (à droite) |
+| `workspace-info` | Section « Contexte » : branche (jaune si modifs non commitées), worktree (« lié » si secondaire), ticket Jira tiré du nom de branche ; rafraîchi toutes les 15 s ; footer si pas de starboard | Validé ; cas sans starboard couvert par un test |
 
 ## 6. Partager les mods
 
-1. Publier `sidebar` (bibliothèque de l'organisation, ou dépôt GitHub).
-2. Chacun installe `sidebar` s'il le souhaite.
+1. Publier `starboard` (bibliothèque de l'organisation, ou dépôt GitHub).
+2. Chacun installe `starboard` s'il le souhaite.
 3. Chaque auteur branche son mod avec le schéma `try`/`catch` ci-dessus, sans dépendance.
-4. Il publie son mod ; ceux qui ont `sidebar` voient la section dans le panneau, les autres l'affichage de base.
+4. Il publie son mod ; ceux qui ont `starboard` voient la section dans le panneau, les autres l'affichage de base.
 
 Par GitHub : un fichier `.claude-plugin/marketplace.json` dans le dépôt, puis l'installation par :
 
@@ -117,7 +117,7 @@ Règles proposées pour les contributeurs :
 
 ## 7. Reste à faire
 
-- [x] Vérifier que `sidebar.publish` passe par le hook de l'hôte
+- [x] Vérifier que `starboard.publish` passe par le hook de l'hôte
 - [x] Voir de quel côté le panneau s'ancre : à droite
 - [ ] Faire suivre à workspace-info le dossier où Claude travaille, pas seulement celui de la session
 - [ ] Section Docker (`docker ps --filter name=hap-<branche>`)
