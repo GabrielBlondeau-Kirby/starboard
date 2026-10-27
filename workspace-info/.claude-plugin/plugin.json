@@ -1,0 +1,5 @@
+{
+  "name": "workspace-info",
+  "version": "0.1.0",
+  "description": "Branche, worktree et ticket Jira du dossier courant : dans le panneau sidebar s'il est installé, sinon dans le footer"
+}

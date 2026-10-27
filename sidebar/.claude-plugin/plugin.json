@@ -1,0 +1,6 @@
+{
+  "name": "sidebar",
+  "version": "0.1.0",
+  "description": "Panneau latéral qui regroupe les sections publiées par d'autres mods via $.sidebar",
+  "types": "./types/index.d.ts"
+}
