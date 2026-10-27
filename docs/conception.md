@@ -92,6 +92,7 @@ export const register: Register = on => {
 | --- | --- | --- |
 | `starboard` | Hôte : `$.starboard`, panneau, commande `/starboard`, repli des sections | Validé, chargé et vu en session (à droite) |
 | `workspace-info` | Section « Contexte » : branche (jaune si modifs non commitées), worktree (« lié » si secondaire), ticket Jira tiré du nom de branche ; rafraîchi toutes les 15 s ; footer si pas de starboard | Validé ; cas sans starboard couvert par un test |
+| `tasks` | Section « Tasks » : tâches ouvertes des fichiers à faire du projet (découverts ou nommés par `/todo source`) ; bandeau de la prochaine tâche avec Do / Done ; `/todo` pour lister, lancer, cocher, ajouter ; tâches ouvertes dans le prompt système. Norme : cases Markdown, titre en gras (voir `tasks/README.md`) | Validé, 5 tests ; pas encore vu en session |
 
 ## 6. Partager les mods
 
