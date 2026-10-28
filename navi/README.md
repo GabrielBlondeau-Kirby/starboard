@@ -13,6 +13,10 @@ Un panneau qui liste les sessions Claude Code ouvertes sur la machine, montre qu
 ## Utilisation
 
 - `/navi` ouvre le panneau « Sessions ».
+- `/navi cut <session>` coupe la connexion avec une session ; dans le panneau, `x` coupe celle de la session sous le curseur.
+- `/navi cut-all` coupe toutes les connexions de cette session.
+  Une coupure masque les échanges passés de la paire ; un nouveau message ou une nouvelle mise en relation recrée le lien. L'autre session n'est pas prévenue.
+- Avec [starboard](../README.md), une section « Sessions » montre `🌐` cette session et `🔗` chaque session liée (orange si elle est occupée).
 - Glisser une session sur une autre (ou ↑↓, espace pour la source, entrée pour la cible) : chacune reçoit un message lui demandant de contacter l'autre par SendMessage.
 - En tapant les 3 premières lettres d'une session dans le prompt, l'autocomplétion propose son nom, les sessions liées en premier.
 - En bas à droite du prompt, `🌐 <nom de la session>` donne le nom à utiliser avec SendMessage, et en dessous `🔗 <session>` pour chaque session liée.
