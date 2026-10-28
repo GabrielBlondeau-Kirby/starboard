@@ -49,7 +49,7 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Text, Button } = $.ui.resolve(e)
+    const { Box, Text, Button, Link } = $.ui.resolve(e)
     const list = sortSections(await read($, sections))
     const folded = await read($, collapsed)
 
@@ -63,7 +63,9 @@ export const register: Register = on => {
             {status && <Text color={status.color}>{status.mark}</Text>}
             {one.label && <Text dimColor>{one.label}</Text>}
           </Box>
-          <Text dimColor={one.dim} wrap="truncate-end">{one.value}</Text>
+          <Text dimColor={one.dim} wrap="truncate-end">
+            {one.href ? <Link href={one.href}>{one.value}</Link> : one.value}
+          </Text>
         </Box>
       )
     }

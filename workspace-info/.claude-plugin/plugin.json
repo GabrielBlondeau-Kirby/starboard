@@ -2,6 +2,27 @@
   "license": "MIT",
   "author": { "name": "Gabriel Blondeau" },
   "name": "workspace-info",
-  "version": "0.1.0",
-  "description": "Branche, worktree et ticket Jira du dossier courant : dans le panneau starboard s'il est installé, sinon dans le footer"
+  "version": "0.2.0",
+  "description": "Branche, worktree et ticket Jira du dossier courant (titre, statut, lien vers le ticket) : dans le panneau starboard s'il est installé, sinon dans le footer",
+  "userConfig": {
+    "jiraUrl": {
+      "type": "string",
+      "title": "URL Jira",
+      "description": "Adresse du site Jira, par exemple https://monsite.atlassian.net : la clé du ticket devient un lien. Vide : la clé seule.",
+      "default": ""
+    },
+    "jiraEmail": {
+      "type": "string",
+      "title": "Email Jira",
+      "description": "Email du compte Atlassian, avec le token API : affiche le titre et le statut du ticket.",
+      "default": ""
+    },
+    "jiraToken": {
+      "type": "string",
+      "title": "Token API Jira",
+      "description": "Token API Atlassian (id.atlassian.com, Sécurité, Tokens API). Envoyé seulement à l'URL Jira, dans l'en-tête Authorization.",
+      "sensitive": true,
+      "default": ""
+    }
+  }
 }

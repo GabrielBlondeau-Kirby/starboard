@@ -1,9 +1,16 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface as Engine, Register } from 'claude-code'
 
-import type { Edge, Graph, Peer } from '../types'
+import type { Cut, Edge, Graph, Peer } from '../types'
+
+// The starboard contract, kept local: the mod does not depend on `starboard`, it only uses it when present.
+type StarboardRow = { label?: string; value: string; status?: 'ok' | 'warn' | 'error' | 'off'; dim?: boolean }
+type StarboardSection = { id: string; title: string; order?: number; summary?: string; rows: StarboardRow[] }
+type WithStarboard = Engine & { starboard: { publish: (section: StarboardSection) => Promise<void> } }
 
 const PANE = 'navi'
+const SECTION = 'navi'
+const ALL = '*'
 const POLL_MS = 5000
 const EDGE_TTL_MS = 24 * 60 * 60 * 1000
 const MAX_EDGES_PER_SESSION = 100
@@ -18,10 +25,12 @@ type ListAgentsResult = {
 }
 
 type ConnectMessage = { kind: 'connect'; from: string; to: string }
+type CutMessage = { kind: 'cut'; peer: string }
 
-// The store is shared by every session running this mod: each session writes only its own key,
+// The store is shared by every session running this mod: each session writes only its own keys,
 // so two sessions never race on the same value.
 const edgesKey = (self: string) => `edges:${self}`
+const cutsKey = (self: string) => `cuts:${self}`
 
 const stripRef = (name: string) => name.replace(/\s*\[[^\]]*\]\s*$/, '').trim()
 
@@ -60,6 +69,26 @@ export const partnersOf = (edges: Edge[], names: Set<string>, self: string): str
   return [...partners]
 }
 
+const cuts = (cut: Cut, by: string, other: string) => cut.by === by && (cut.peer === ALL || cut.peer === other)
+
+// Either side may have cut the pair; a message or a connection made after the cut brings the link back.
+export const isCut = (edge: Edge, all: Cut[]): boolean =>
+  all.some(cut => cut.at >= edge.at && (cuts(cut, edge.from, edge.to) || cuts(cut, edge.to, edge.from)))
+
+export const liveEdges = (edges: Edge[], all: Cut[]): Edge[] => edges.filter(edge => !isCut(edge, all))
+
+export const sectionOf = (g: Graph): StarboardSection => {
+  const partners = partnersOf(g.edges, new Set(g.peers.map(peer => peer.name)), g.self)
+  const status = (name: string) => g.peers.find(peer => peer.name === name)?.status
+  const rows: StarboardRow[] = [
+    { label: '🌐', value: g.self, status: 'ok' },
+    ...partners.map((name): StarboardRow => ({ label: '🔗', value: name, status: status(name) === 'busy' ? 'warn' : 'ok' })),
+  ]
+  if (partners.length === 0) rows.push({ value: 'aucune session liée', dim: true })
+  const summary = `${partners.length} liée${partners.length > 1 ? 's' : ''}`
+  return { id: SECTION, title: 'Sessions', order: 30, summary, rows }
+}
+
 export type SessionCompletion = { text: string; description: string }
 
 // Linked sessions first, then the other listed ones; never this session itself.
@@ -83,6 +112,9 @@ export const isConnectMessage = (data: unknown): data is ConnectMessage =>
   typeof (data as ConnectMessage).from === 'string' &&
   typeof (data as ConnectMessage).to === 'string'
 
+export const isCutMessage = (data: unknown): data is CutMessage =>
+  typeof data === 'object' && data !== null && (data as CutMessage).kind === 'cut' && typeof (data as CutMessage).peer === 'string'
+
 export const introduction = (partner: string) =>
   `[navi] La personne te met en relation avec la session « ${partner} », qui travaille sur un sujet lié au tien. ` +
   `Utilise SendMessage (to: "${partner}") pour te présenter : sur quoi tu travailles, ce que tu vas modifier et ce que tu attends d'elle. ` +
@@ -90,12 +122,34 @@ export const introduction = (partner: string) =>
 
 async function readEdges($: Engine, now: number) {
   const edges: Edge[] = []
+  const all: Cut[] = []
   for (const key of await $.store.keys()) {
-    if (!key.startsWith('edges:')) continue
-    const stored = (await $.store.get(key)) as Edge[] | undefined
-    for (const edge of stored ?? []) if (now - edge.at < EDGE_TTL_MS) edges.push(edge)
+    if (key.startsWith('edges:')) {
+      const stored = (await $.store.get(key)) as Edge[] | undefined
+      for (const edge of stored ?? []) if (now - edge.at < EDGE_TTL_MS) edges.push(edge)
+    } else if (key.startsWith('cuts:')) {
+      const stored = (await $.store.get(key)) as Omit<Cut, 'by'>[] | undefined
+      for (const cut of stored ?? []) if (now - cut.at < EDGE_TTL_MS) all.push({ ...cut, by: key.slice('cuts:'.length) })
+    }
   }
-  return edges
+  return liveEdges(edges, all)
+}
+
+// Each refresh would redraw the starboard pane: publish only what changed.
+let published = ''
+
+async function publish($: Engine) {
+  const g: Graph = await read($, graph)
+  if (!g.self) return
+  const section = sectionOf(g)
+  const text = JSON.stringify(section)
+  if (text === published) return
+  published = text
+  try {
+    await ($ as WithStarboard).starboard.publish(section)
+  } catch {
+    // No starboard: the prompt footer already shows the session and its links.
+  }
 }
 
 async function recordEdge($: Engine, edge: Edge) {
@@ -105,6 +159,7 @@ async function recordEdge($: Engine, edge: Edge) {
   const stored = ((await $.store.get(key)) as Edge[] | undefined) ?? []
   await $.store.set(key, [...stored, edge].slice(-MAX_EDGES_PER_SESSION))
   await update($, graph, g => ({ ...g, edges: [...g.edges, edge] }))
+  await publish($)
 }
 
 async function refresh($: Engine) {
@@ -114,16 +169,36 @@ async function refresh($: Engine) {
     const { self, peers } = parseListing((call.result ?? {}) as ListAgentsResult)
     const edges = await readEdges($, await $.clock.now())
     await update($, graph, g => ({ ...g, self, peers, edges }))
+    await publish($)
   } catch (error) {
     await update($, graph, g => ({ ...g, notice: `ListAgents indisponible : ${String(error)}` }))
   }
+}
+
+// Records the cut under this session's own key; `peer` is a session name or ALL.
+async function cut($: Engine, peer: string): Promise<string> {
+  const g: Graph = await read($, graph)
+  if (!g.self) return 'Nom de cette session inconnu : connexion impossible à couper.'
+  const partners = partnersOf(g.edges, new Set(g.peers.map(p => p.name)), g.self)
+  if (peer !== ALL && !partners.includes(peer)) return `Aucune connexion avec « ${peer} ».`
+  if (partners.length === 0) return 'Aucune connexion à couper.'
+
+  const now = await $.clock.now()
+  const key = cutsKey(g.self)
+  const stored = ((await $.store.get(key)) as Omit<Cut, 'by'>[] | undefined) ?? []
+  await $.store.set(key, [...stored.filter(c => now - c.at < EDGE_TTL_MS), { peer, at: now }].slice(-MAX_EDGES_PER_SESSION))
+  await refresh($)
+
+  const text = peer === ALL ? `Toutes les connexions de ${g.self} coupées (${partners.length})` : `Connexion coupée : ${g.self} ↔ ${peer}`
+  $.ui.toast(text)
+  return `${text}.`
 }
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'navi',
-      description: 'Ouvre le panneau des sessions locales et de leurs connexions',
+      description: 'Panneau des sessions locales ; /navi cut <session> coupe une connexion, /navi cut-all toutes',
     })
     // Earlier versions pinned the name as a status notice; the host keeps it until cleared.
     $.ui.status(undefined)
@@ -133,8 +208,15 @@ export const register: Register = on => {
     return next(e)
   })
 
-  on('command.run', { command: 'navi' }, async $ => {
+  on('command.run', { command: 'navi' }, async ($, e) => {
+    const [action = '', ...rest] = e.args.trim().split(/\s+/)
     await refresh($)
+    if (action === 'cut-all') return { text: await cut($, ALL) }
+    if (action === 'cut') {
+      const peer = stripRef(rest.join(' '))
+      return { text: peer ? await cut($, peer) : 'Usage : /navi cut <session>' }
+    }
+    if (action !== '') return { text: 'Usage : /navi, /navi cut <session>, /navi cut-all' }
     await $.ui.open({ id: PANE, title: 'Sessions' })
 
     return { text: 'Panneau des sessions ouvert.' }
@@ -156,6 +238,11 @@ export const register: Register = on => {
   })
 
   on('ui.message', async ($, e, next) => {
+    if (isCutMessage(e.data)) {
+      const text = await cut($, e.data.peer)
+      await update($, graph, g => ({ ...g, notice: text.startsWith('Connexion coupée') ? '' : text }))
+      return next(e)
+    }
     if (!isConnectMessage(e.data)) return next(e)
     const { from, to } = e.data
     if (from === to) return next(e)
@@ -226,7 +313,7 @@ export const register: Register = on => {
 
     return (
       <Box flexDirection="column">
-        <Text dimColor>Glisse une session sur une autre pour les mettre en relation (ou ↑↓, espace puis entrée).</Text>
+        <Text dimColor>Glisse une session sur une autre pour les mettre en relation (ou ↑↓, espace puis entrée) ; x coupe la connexion avec la session sous le curseur.</Text>
         {g.notice !== '' && <Text color="red">{g.notice}</Text>}
         {g.peers.length === 0 ? (
           <Text dimColor>Aucune session trouvée.</Text>

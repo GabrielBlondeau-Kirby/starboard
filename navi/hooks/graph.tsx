@@ -47,7 +47,10 @@ export default function SessionGraph(graph: Graph, surface: ClientSurface<DragSt
       if (event.key === 'up') surface.setState({ ...current, cursor: Math.max(0, current.cursor - 1) })
       else if (event.key === 'down') surface.setState({ ...current, cursor: Math.min(count - 1, current.cursor + 1) })
       else if (event.key === ' ') surface.setState({ ...current, source: current.cursor })
-      else if (event.key === 'return') {
+      else if (event.key === 'x') {
+        const peer = graph.peers[current.cursor]
+        if (peer && !peer.isSelf) surface.post({ kind: 'cut', peer: peer.name })
+      } else if (event.key === 'return') {
         connect(current.source, current.cursor)
         surface.setState({ cursor: current.cursor })
       }
