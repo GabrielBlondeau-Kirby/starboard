@@ -1,5 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
+import { jiraOf, ticketRows } from '../hooks/register'
+
 const GIT: Record<string, string> = {
   'rev-parse --show-toplevel': '/repo/hap-pay-12',
   'branch --show-current': 'feature/PAY-12-refund',
@@ -7,17 +9,58 @@ const GIT: Record<string, string> = {
   'status --porcelain': '',
 }
 
-test('without the starboard mod, the workspace goes to the footer', async ($, on) => {
-  const statuses: (string | undefined)[] = []
+const JIRA = { jiraUrl: 'https://example.atlassian.net/', jiraEmail: 'me@example.com', jiraToken: 'secret-token' }
+
+function stub(on: Parameters<Parameters<typeof test>[1]>[1], answer?: { status: number; body: object }, urls: string[] = []) {
   on('process.run', (_, e) => ({ value: { exitCode: 0, stdout: GIT[e.argv.slice(1).join(' ')] ?? '', stderr: '' } }))
   on('clock.every', () => ({ value: { cancel: () => {} } }))
+  on('clock.now', () => ({ value: 0 }))
+  on('http.fetch', (_, e) => {
+    urls.push(e.url)
+    const { status, body } = answer ?? { status: 200, body: {} }
+    return { value: { status, ok: status < 300, headers: {}, text: JSON.stringify(body) } }
+  })
+}
+
+async function footer($: Parameters<Parameters<typeof test>[1]>[0], on: Parameters<Parameters<typeof test>[1]>[1]) {
+  const statuses: (string | undefined)[] = []
   on('ui.status', (_, e) => {
     statuses.push(e.text)
     return { value: undefined }
   })
   on('session.start', (_, e) => ({ cwd: e.cwd }))
-
   await $.session.start({ cwd: '/repo/hap-pay-12', surface: 'terminal', isInteractive: true })
+  return statuses.at(-1)
+}
 
-  expect(statuses.at(-1)).toBe('feature/PAY-12-refund · hap-pay-12 (lié) · PAY-12')
+test('without the starboard mod, the workspace goes to the footer', async ($, on) => {
+  const urls: string[] = []
+  stub(on, undefined, urls)
+
+  expect(await footer($, on)).toBe('feature/PAY-12-refund · hap-pay-12 (lié) · PAY-12')
+  expect(urls).toEqual([])
+})
+
+test('a Jira URL alone links the key without calling Jira', async () => {
+  // Without a token the rows are built without touching the engine.
+  const rows = await ticketRows(undefined as never, jiraOf({ jiraUrl: JIRA.jiraUrl }), 'PAY-12')
+
+  expect(rows).toEqual([{ label: 'jira', value: 'PAY-12', href: 'https://example.atlassian.net/browse/PAY-12' }])
+})
+
+test('with a token, the footer shows the status, never the token', { options: JIRA }, async ($, on) => {
+  const urls: string[] = []
+  stub(on, { status: 200, body: { fields: { summary: 'Rembourser une commande', status: { name: 'En cours', statusCategory: { key: 'indeterminate' } } } } }, urls)
+
+  const text = await footer($, on)
+
+  expect(text).toBe('feature/PAY-12-refund · hap-pay-12 (lié) · PAY-12 · En cours')
+  expect(urls).toEqual(['https://example.atlassian.net/rest/api/3/issue/PAY-12?fields=summary,status'])
+  expect(text?.includes('secret-token')).toBe(false)
+})
+
+test('a refused token keeps the key in the footer', { options: { ...JIRA, jiraUrl: 'https://refused.atlassian.net' } }, async ($, on) => {
+  stub(on, { status: 401, body: {} })
+
+  expect(await footer($, on)).toBe('feature/PAY-12-refund · hap-pay-12 (lié) · PAY-12')
 })

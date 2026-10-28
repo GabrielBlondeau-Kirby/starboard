@@ -6,7 +6,7 @@ Un panneau latéral pour Claude Code dans lequel d'autres mods publient leur sec
 | Mod | Rôle |
 | --- | --- |
 | `starboard` | L'hôte : ajoute `$.starboard.publish(section)` / `$.starboard.remove(id)`, dessine le panneau, commande `/starboard` |
-| `workspace-info` | Section « Contexte » : branche, worktree, ticket Jira tiré du nom de branche. Sans `starboard`, s'affiche dans le footer |
+| `workspace-info` | Section « Contexte » : branche, worktree, ticket Jira tiré du nom de branche. Avec les options Jira, son titre, son statut et un lien vers le ticket. Sans `starboard`, s'affiche dans le footer |
 | `ci-status` | Section « CI » : état de la CI Azure DevOps de la branche (PR, builds, étapes en échec), `/ci on\|off`. Sans `starboard`, s'affiche dans le footer |
 | `navi` | *Hey, listen!* Panneau des sessions Claude Code locales, `/navi` : qui parle à qui, mise en relation par glisser-déposer, `/navi cut` et `cut-all` pour couper. Section « Sessions » dans starboard |
 
@@ -29,12 +29,16 @@ claude plugin install starboard --marketplace GabrielBlondeau-Kirby/starboard
 
 Le panneau s'ouvre au démarrage si le terminal est assez large (plein écran, 110 colonnes et plus), sinon avec `/starboard`.
 
+## Ticket Jira de workspace-info
+
+`/config`, plugin `workspace-info` : `jiraUrl` (par exemple `https://monsite.atlassian.net`) fait de la clé un lien ; `jiraEmail` et `jiraToken` (token API Atlassian, gardé dans le stockage sécurisé) ajoutent le titre et le statut, relus toutes les 5 minutes. Sans ces options, la clé seule.
+
 ## Brancher son propre mod
 
 `starboard` est facultatif : un mod ne le déclare pas en dépendance. Il appelle `$.starboard.publish` dans un `try` et garde son affichage de base dans le `catch`.
 
 ```ts
-type StarboardRow = { label?: string; value: string; status?: 'ok' | 'warn' | 'error' | 'off'; dim?: boolean }
+type StarboardRow = { label?: string; value: string; status?: 'ok' | 'warn' | 'error' | 'off'; dim?: boolean; href?: string }
 type StarboardSection = { id: string; title: string; order?: number; rows: StarboardRow[] }
 type WithStarboard = Engine & { starboard: { publish: (section: StarboardSection) => Promise<void> } }
 
@@ -47,6 +51,8 @@ async function refresh($: Engine) {
   }
 }
 ```
+
+Une ligne avec `href` affiche sa valeur comme un lien cliquable.
 
 Le contrat complet est dans `starboard/types/index.d.ts`, la conception dans `docs/conception.md`.
 

@@ -5,6 +5,8 @@ export type StarboardRow = {
   value: string
   status?: StarboardStatus
   dim?: boolean
+  /** Draws the value as a link to this URL. */
+  href?: string
 }
 
 export type StarboardSection = {
