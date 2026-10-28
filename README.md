@@ -7,6 +7,8 @@ Un panneau latéral pour Claude Code dans lequel d'autres mods publient leur sec
 | --- | --- |
 | `starboard` | L'hôte : ajoute `$.starboard.publish(section)` / `$.starboard.remove(id)`, dessine le panneau, commande `/starboard` |
 | `workspace-info` | Section « Contexte » : branche, worktree, ticket Jira tiré du nom de branche. Sans `starboard`, s'affiche dans le footer |
+| `ci-status` | Section « CI » : état de la CI Azure DevOps de la branche (PR, builds, étapes en échec), `/ci on\|off`. Sans `starboard`, s'affiche dans le footer |
+| `navi` | *Hey, listen!* Panneau des sessions Claude Code locales, `/navi` : qui parle à qui, et mise en relation de deux sessions par glisser-déposer |
 
 ## Installation
 
@@ -15,6 +17,8 @@ Un panneau latéral pour Claude Code dans lequel d'autres mods publient leur sec
 ```
 /plugin install starboard --marketplace GabrielBlondeau-Kirby/starboard
 /plugin install workspace-info --marketplace GabrielBlondeau-Kirby/starboard
+/plugin install ci-status --marketplace GabrielBlondeau-Kirby/starboard
+/plugin install navi --marketplace GabrielBlondeau-Kirby/starboard
 ```
 
 Répondre `y` pour ajouter le marketplace, puis choisir la portée. Depuis un shell :

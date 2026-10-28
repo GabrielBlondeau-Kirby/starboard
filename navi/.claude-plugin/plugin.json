@@ -1,0 +1,8 @@
+{
+  "license": "MIT",
+  "author": { "name": "Gabriel Blondeau" },
+  "name": "navi",
+  "version": "0.1.0",
+  "description": "« Hey, listen! » : panneau des sessions Claude Code locales, qui parle à qui, et glisser-déposer pour mettre deux sessions en relation",
+  "types": "./types/index.d.ts"
+}
