@@ -6,6 +6,7 @@
     { "name": "workspace-info", "source": "./workspace-info", "description": "Section branche, worktree et ticket Jira (footer sans starboard)" },
     { "name": "tasks", "source": "./tasks", "description": "Section des tâches du projet (TODO.md, docs/A-FAIRE.md…), bandeau de la prochaine tâche, /todo, et tâches ouvertes dans le contexte de Claude" },
     { "name": "ci-status", "source": "./ci-status", "description": "Section CI : état de la CI Azure DevOps de la branche courante, étapes en échec, /ci on|off (footer sans starboard)" },
-    { "name": "navi", "source": "./navi", "description": "« Hey, listen! » : panneau des sessions Claude Code locales et mise en relation de deux sessions par glisser-déposer" }
+    { "name": "navi", "source": "./navi", "description": "« Hey, listen! » : panneau des sessions Claude Code locales et mise en relation de deux sessions par glisser-déposer" },
+    { "name": "docker-stacks", "source": "./docker-stacks", "description": "Section Docker : stacks Compose actives (filtre par préfixe) et leur mémoire, alerte au-delà d'environ 80 % de la VM, /docker" }
   ]
 }
