@@ -187,9 +187,17 @@ async function add($: Engine, text: string): Promise<string> {
   return `Added to ${target}: ${text}`
 }
 
+// A press and its hotkey, or the mod loaded twice (a dev copy beside the installed one), each start
+// the task: the prompts queue while a turn runs and arrive as one doubled message.
+const RESTART_MS = 5000
+let lastStart = { n: 0, at: 0 }
+
 async function start($: Engine, n: number): Promise<string> {
   const task = current.find(t => t.n === n)
   if (!task) return `No task #${n}. Run /todo to see the numbers.`
+  const now = await $.clock.now()
+  if (lastStart.n === n && now - lastStart.at < RESTART_MS) return `#${n} is already started.`
+  lastStart = { n, at: now }
   void $.prompt.submit({
     text: `Work on task #${n} from ${task.source}:\n\n**${task.title}** ${task.body}\n\nWhen it is done, tick it in ${task.source} (\`- [x]\`).`,
   })
