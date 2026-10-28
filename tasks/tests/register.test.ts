@@ -40,7 +40,7 @@ test('ticking keeps the line and adds a missing box', async () => {
 })
 
 // The engine hands hooks absolute paths, under the test's working directory (the mod folder).
-const rel = (path: string) => path.replace(/\\/g, '/').replace(/^.*\/dev-mods\/[^/]+\/tasks\/?/, '').replace(/\/$/, '')
+const rel = (path: string) => path.replace(/\\/g, '/').replace(/^.*\/tasks(\/|$)/, '').replace(/\/$/, '')
 
 type Body = Extract<Parameters<typeof test>[1], (...args: never[]) => unknown>
 type On = Parameters<Body>[1]
