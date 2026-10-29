@@ -2,7 +2,8 @@ import type { EngineInterface as Engine, PluginOptions, Register } from 'claude-
 
 // The starboard contract, kept local: the mod does not depend on `starboard`, it only uses it when present.
 type StarboardRow = { label?: string; value: string; status?: 'ok' | 'warn' | 'error' | 'off'; dim?: boolean; href?: string }
-type StarboardSection = { id: string; title: string; order?: number; summary?: string; rows: StarboardRow[] }
+type StarboardAction = { label: string; hint: string; command: string; args?: string }
+type StarboardSection = { id: string; title: string; order?: number; summary?: string; rows: StarboardRow[]; actions?: StarboardAction[] }
 type WithStarboard = Engine & { starboard: { publish: (section: StarboardSection) => Promise<void> } }
 
 export type Jira = { url?: string; email?: string; token?: string }
@@ -16,6 +17,7 @@ type PrLookup = { at: number; pr?: PullRequest; error?: string }
 const SECTION = 'workspace-info'
 const POLL_MS = 15000
 const CACHE_MS = 5 * 60 * 1000
+const FOCUS_MS = 30 * 60 * 1000
 const TICKET = /\b([A-Z][A-Z0-9]+-\d+)\b/
 const CATEGORY: Record<string, StarboardRow['status']> = { done: 'ok', indeterminate: 'warn', new: 'off' }
 const PR_CACHE_MS = 60 * 1000
@@ -172,6 +174,58 @@ export async function pullRequestRows($: Engine, top: string, branch: string): P
   return pr.status === 'active' ? [row, reviewOf(pr.reviewers)] : [row]
 }
 
+export type Focus = { top: string; branch?: string; at: number }
+
+// Where a tool call works: the files it writes, the folders a command enters or points git at.
+// Reads are left out: looking at another repository for reference is not working there.
+export function pathsOf(call: { tool: string; [key: string]: unknown }, home = ''): string[] {
+  const field = (key: string) => (typeof call[key] === 'string' ? [call[key] as string] : [])
+  const raw = call.tool === 'Edit' || call.tool === 'Write' ? field('file_path')
+    : call.tool === 'NotebookEdit' ? field('notebook_path')
+    : call.tool === 'Bash' && typeof call.command === 'string'
+      ? [...call.command.matchAll(/(?:^|&&|;|\|\|)\s*cd\s+(["']?)([^\s"';&|]+)\1|\bgit\s+-C\s+(["']?)([^\s"';&|]+)\3/g)].map(m => m[2] ?? m[4] ?? '')
+      : []
+  return raw.filter(Boolean).map(path => (path.startsWith('~/') && home ? `${home}${path.slice(1)}` : path))
+    .filter(path => path.startsWith('/') && !/^\/(private\/)?tmp\//.test(path) && !(home && path.startsWith(`${home}/.claude/`)))
+}
+
+const tops = new Map<string, string | undefined>()
+
+async function topOf($: Engine, path: string): Promise<string | undefined> {
+  // A file being written may not exist yet: its nearest existing folder answers for it.
+  let dir = path
+  while (dir.length > 1 && !(await $.fs.exists(dir).catch(() => false))) dir = dir.slice(0, dir.lastIndexOf('/')) || '/'
+  if (!tops.has(dir)) {
+    const top = await git($, ['-C', dir, 'rev-parse', '--show-toplevel'])
+      ?? await git($, ['-C', dir.slice(0, dir.lastIndexOf('/')) || '/', 'rev-parse', '--show-toplevel'])
+    tops.set(dir, top)
+  }
+  return tops.get(dir)
+}
+
+let focus: Focus | undefined
+
+// The last worktree the session wrote in; cleared once the session works in its own folder again.
+async function noteWork($: Engine, call: { tool: string; [key: string]: unknown }) {
+  const paths = pathsOf(call, (await $.env.get('HOME')) ?? '')
+  if (paths.length === 0) return false
+  const sessionTop = await git($, ['rev-parse', '--show-toplevel'])
+  const top = await topOf($, paths[paths.length - 1] ?? '')
+  if (!top) return false
+  const before = focus?.top
+  focus = top === sessionTop ? undefined : { top, branch: await git($, ['-C', top, 'branch', '--show-current']), at: await $.clock.now() }
+  return focus?.top !== before
+}
+
+export function focusRows(current: Focus | undefined, sessionTop: string | undefined, now: number): StarboardRow[] {
+  if (!current || current.top === sessionTop || now - current.at > FOCUS_MS) return []
+  const name = current.top.split('/').pop()
+  return [
+    { label: 'travail', value: `⚠ ${name}${current.branch ? ` · ${current.branch}` : ''}`, status: 'warn' },
+    { value: `la session regarde ${sessionTop?.split('/').pop() ?? 'un autre dossier'} : /cd ${current.top}`, dim: true },
+  ]
+}
+
 export async function describeWorkspace($: Engine, jira: Jira = {}): Promise<StarboardRow[]> {
   const top = await git($, ['rev-parse', '--show-toplevel'])
   if (!top) return [{ value: 'pas un dépôt git', status: 'off', dim: true }]
@@ -183,6 +237,7 @@ export async function describeWorkspace($: Engine, jira: Jira = {}): Promise<Sta
   const dirty = await git($, ['status', '--porcelain'])
 
   return [
+    ...focusRows(focus, top, await $.clock.now()),
     { label: 'branche', value: branch, status: dirty ? 'warn' : 'ok' },
     { label: 'worktree', value: `${top.split('/').pop()}${isLinked ? ' (lié)' : ''}` },
     ...(await ticketRows($, jira, ticketOf(branch))),
@@ -196,9 +251,13 @@ export const footerOf = (rows: StarboardRow[]): string =>
 async function refresh($: Engine, jira: Jira) {
   const rows = await describeWorkspace($, jira)
   const ticket = rows.find(row => row.label === 'jira' && !row.dim)
+  const away = rows.some(row => row.label === 'travail') && focus
+  // `/cd` is the engine's own command where this build has it: the button moves the session, and every mod with it.
+  const canCd = away ? (await $.command.list().catch(() => [])).some(command => command.name === 'cd') : false
+  const actions: StarboardAction[] = away && canCd ? [{ label: '↪', hint: `Passer la session dans ${focus?.top}`, command: 'cd', args: focus?.top }] : []
   try {
     // Without the starboard mod `$.starboard` is absent and the call throws: fall back to the footer.
-    await ($ as WithStarboard).starboard.publish({ id: SECTION, title: 'Contexte', order: 10, summary: ticket?.value.split(' · ')[0], rows })
+    await ($ as WithStarboard).starboard.publish({ id: SECTION, title: 'Contexte', order: 10, summary: away ? '⚠ ailleurs' : ticket?.value.split(' · ')[0], rows, actions })
   } catch {
     $.ui.status(footerOf(rows))
   }
@@ -209,6 +268,14 @@ export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
     await refresh($, jira)
     $.clock.every(POLL_MS, () => refresh($, jira))
+    return next(e)
+  })
+
+  // Watches only: the call always goes through, and a failure here never touches it.
+  on('tool.call', async ($, e, next) => {
+    noteWork($, e as unknown as { tool: string; [key: string]: unknown })
+      .then(changed => (changed ? refresh($, jira) : undefined))
+      .catch(() => {})
     return next(e)
   })
 }

@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { jiraOf, parseRemote, reviewOf, stateOf, ticketRows } from '../hooks/register'
+import { focusRows, jiraOf, parseRemote, pathsOf, reviewOf, stateOf, ticketRows } from '../hooks/register'
 
 const GIT: Record<string, string> = {
   'rev-parse --show-toplevel': '/repo/hap-pay-12',
@@ -101,4 +101,25 @@ test('the branch PR is a link with its state and review, never the PAT', async (
   } finally {
     delete GIT['remote get-url origin']
   }
+})
+
+test('the work happens where files are written and where commands go', () => {
+  expect(pathsOf({ tool: 'Edit', file_path: '/src/shop-x/app/a.ts' })).toEqual(['/src/shop-x/app/a.ts'])
+  expect(pathsOf({ tool: 'Read', file_path: '/src/other/README.md' })).toEqual([])
+  expect(pathsOf({ tool: 'Bash', command: 'cd ~/src/shop-x && make test' }, '/home/me')).toEqual(['/home/me/src/shop-x'])
+  expect(pathsOf({ tool: 'Bash', command: 'git -C "/src/shop-y" status; cd app' })).toEqual(['/src/shop-y'])
+  expect(pathsOf({ tool: 'Write', file_path: '/private/tmp/scratch/x.py' })).toEqual([])
+  expect(pathsOf({ tool: 'Write', file_path: '/home/me/.claude/memory/x.md' }, '/home/me')).toEqual([])
+})
+
+test('working in another worktree than the session warns, until it is old news', () => {
+  const focus = { top: '/src/shop-x', branch: 'feature/x', at: 0 }
+
+  expect(focusRows(focus, '/src/shop', 1000)).toEqual([
+    { label: 'travail', value: '⚠ shop-x · feature/x', status: 'warn' },
+    { value: 'la session regarde shop : /cd /src/shop-x', dim: true },
+  ])
+  expect(focusRows(focus, '/src/shop-x', 1000)).toEqual([])
+  expect(focusRows(focus, '/src/shop', 31 * 60 * 1000)).toEqual([])
+  expect(focusRows(undefined, '/src/shop', 0)).toEqual([])
 })
