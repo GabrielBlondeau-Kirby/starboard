@@ -226,6 +226,14 @@ export function focusRows(current: Focus | undefined, sessionTop: string | undef
   ]
 }
 
+// The first block of the id is enough to tell sessions apart and to find the transcript (`<id>.jsonl`).
+export const shortId = (id: string): string => id.split('-')[0] ?? id
+
+async function sessionRows($: Engine): Promise<StarboardRow[]> {
+  const id = await $.session.id().catch(() => undefined)
+  return id ? [{ label: 'session', value: shortId(id), dim: true }] : []
+}
+
 export async function describeWorkspace($: Engine, jira: Jira = {}): Promise<StarboardRow[]> {
   const top = await git($, ['rev-parse', '--show-toplevel'])
   if (!top) return [{ value: 'pas un dépôt git', status: 'off', dim: true }]
@@ -240,6 +248,7 @@ export async function describeWorkspace($: Engine, jira: Jira = {}): Promise<Sta
     ...focusRows(focus, top, await $.clock.now()),
     { label: 'branche', value: branch, status: dirty ? 'warn' : 'ok' },
     { label: 'worktree', value: `${top.split('/').pop()}${isLinked ? ' (lié)' : ''}` },
+    ...(await sessionRows($)),
     ...(await ticketRows($, jira, ticketOf(branch))),
     ...(current ? await pullRequestRows($, top, current) : []),
   ]
