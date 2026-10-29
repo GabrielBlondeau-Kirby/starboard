@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { StarboardRow, StarboardSection, StarboardStatus } from '../types'
-import { cardOf, INK, MARK_INK } from './palette'
+import { paletteOf } from './palette'
 
 const PANE = 'starboard'
 const sections = atom({ plugin: 'starboard', key: 'sections' } as const, {})
@@ -103,6 +103,7 @@ export const register: Register = on => {
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Text, Button, Link } = $.ui.resolve(e)
+    const { ink, marks, card: cardOf } = paletteOf(e.surface)
     const list = sortSections(await read($, sections), await read($, layout))
     const move = async (id: string, step: -1 | 1) => {
       const next = moveSection(list.map(section => section.id), id, step)
@@ -116,19 +117,19 @@ export const register: Register = on => {
       return (
         <Box flexDirection="row" justifyContent="space-between" gap={1}>
           <Box flexDirection="row" gap={1} flexShrink={0}>
-            {one.status && <Text color={MARK_INK[one.status]}>{MARKS[one.status]}</Text>}
-            {one.label && <Text color={INK.dim}>{one.label}</Text>}
+            {one.status && <Text color={marks[one.status]}>{MARKS[one.status]}</Text>}
+            {one.label && <Text color={ink.dim}>{one.label}</Text>}
           </Box>
           {one.href
-            ? <Text color={INK.link} underline wrap="truncate-end"><Link href={one.href}>{one.value}</Link></Text>
-            : <Text color={one.dim ? INK.dim : INK.text} wrap="truncate-end">{one.value}</Text>}
+            ? <Text color={ink.link} underline wrap="truncate-end"><Link href={one.href}>{one.value}</Link></Text>
+            : <Text color={one.dim ? ink.dim : ink.text} wrap="truncate-end">{one.value}</Text>}
         </Box>
       )
     }
 
     const compactButton = (
       <Box flexDirection="row" justifyContent="flex-end">
-        <Button key="fold" plain label="Rabattre le panneau dans le footer" onPress={() => fold($)}>
+        <Button key="fold" plain onPress={() => fold($)}>
           <Text dimColor>⇤</Text>
         </Button>
       </Box>
@@ -147,38 +148,37 @@ export const register: Register = on => {
                 <Button
                   key={`toggle-${section.id}`}
                   plain
-                  label={section.title}
                   onPress={() => update($, collapsed, all => ({ ...all, [section.id]: !isFolded }))}
                 >
                   <Text weight="semibold" bold color={card.title}>{section.title}</Text>
-                  <Text color={INK.dim}> {isFolded ? '▸' : '▾'}</Text>
+                  <Text color={ink.dim}> {isFolded ? '▸' : '▾'}</Text>
                 </Button>
                 <Box flexDirection="row" gap={1} flexShrink={1}>
-                  {section.summary && <Text color={INK.dim} wrap="truncate-end">{section.summary}</Text>}
+                  {section.summary && <Text color={ink.dim} wrap="truncate-end">{section.summary}</Text>}
                   {(section.actions ?? []).map(action => (
                     <Button
                       key={`action-${section.id}-${action.command}-${action.args ?? ''}`}
                       plain
-                      label={action.hint}
+                     
                       onPress={() => void $.command.run({ command: action.command, args: action.args ?? '' }).catch(() => {})}
                     >
-                      <Text color={INK.link}>{action.label}</Text>
+                      <Text color={ink.link}>{action.label}</Text>
                     </Button>
                   ))}
                   {index > 0 && (
-                    <Button key={`up-${section.id}`} plain label={`Monter ${section.title}`} onPress={() => move(section.id, -1)}>
-                      <Text color={INK.dim}>▲</Text>
+                    <Button key={`up-${section.id}`} plain onPress={() => move(section.id, -1)}>
+                      <Text color={ink.dim}>▲</Text>
                     </Button>
                   )}
                   {index < list.length - 1 && (
-                    <Button key={`down-${section.id}`} plain label={`Descendre ${section.title}`} onPress={() => move(section.id, 1)}>
-                      <Text color={INK.dim}>▼</Text>
+                    <Button key={`down-${section.id}`} plain onPress={() => move(section.id, 1)}>
+                      <Text color={ink.dim}>▼</Text>
                     </Button>
                   )}
                 </Box>
               </Box>
               {!isFolded && section.rows.map(row)}
-              {!isFolded && section.note && <Text color={INK.dim}>{section.note}</Text>}
+              {!isFolded && section.note && <Text color={ink.dim}>{section.note}</Text>}
             </Box>
           )
         })}

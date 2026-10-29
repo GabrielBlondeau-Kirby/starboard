@@ -1,6 +1,8 @@
 import type { StarboardStatus } from '../types'
 
-export type Card = { background: string; border: string; title: string }
+export type Card = { background?: string; border: string; title: string }
+export type Ink = { text: string; dim: string; link: string }
+export type Palette = { ink: Ink; marks: Record<StarboardStatus, string>; card: (id: string) => Card }
 
 // Dark inks on every pastel card: the terminal's own text colors are made for its background, not ours.
 export const INK = { text: '#1f2328', dim: '#4b535c', link: '#0a4f96' }
@@ -36,7 +38,7 @@ export const contrast = (a: string, b: string): number => {
 }
 
 // A pastel background, and a title in a far hue darkened until it reads on it (WCAG AA, 4.5:1).
-export function cardOf(id: string): Card {
+export function cardOf(id: string): Card & { background: string } {
   const hue = hueOf(id)
   const background = hex(hue, 28, 85)
   const titleHue = (hue + 150) % 360
@@ -45,3 +47,15 @@ export function cardOf(id: string): Card {
   while (contrast(title, background) < MIN_CONTRAST && lightness > 10) title = hex(titleHue, 70, (lightness -= 2))
   return { background, border: hex(hue, 25, 62), title }
 }
+
+// A desktop draws each Button natively, in its own theme's text color whatever we ask: on a pastel card
+// that text vanishes. There the cards keep the app's background and the inks are the theme's own keys.
+const THEMED: Palette = {
+  ink: { text: 'text', dim: 'inactive', link: 'suggestion' },
+  marks: { ok: 'success', warn: 'warning', error: 'error', off: 'inactive' },
+  card: id => ({ border: hex(hueOf(id), 45, 55), title: 'text' }),
+}
+
+const PASTEL: Palette = { ink: INK, marks: MARK_INK, card: cardOf }
+
+export const paletteOf = (surface: string): Palette => (surface === 'terminal' ? PASTEL : THEMED)
