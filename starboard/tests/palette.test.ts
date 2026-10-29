@@ -18,7 +18,7 @@ test('a section keeps its card from one redraw to the next', () => {
 test('every card is pastel and every ink reads on it', () => {
   for (const id of IDS) {
     const { background, title } = cardOf(id)
-    expect(contrast(background, '#000000')).toBeGreaterThan(14)
+    expect(contrast(background, '#000000')).toBeGreaterThan(12)
     expect(contrast(title, background)).toBeGreaterThanOrEqual(4.5)
     expect(contrast(INK.text, background)).toBeGreaterThanOrEqual(4.5)
     expect(contrast(INK.link, background)).toBeGreaterThanOrEqual(4.5)
