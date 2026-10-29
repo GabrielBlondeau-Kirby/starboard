@@ -10,7 +10,7 @@ const collapsed = atom({ plugin: 'starboard', key: 'collapsed' } as const, {})
 // The order the person chose with ▲ ▼, kept across sessions; sections it does not name follow their own `order`.
 const layout = atom({ plugin: 'starboard', key: 'layout' } as const, [])
 const LAYOUT = 'layout'
-// Folded: the side pane closed, one line above the prompt instead; kept across sessions.
+// Folded: the side pane closed, its summary in the footer instead; kept across sessions.
 const compact = atom({ plugin: 'starboard', key: 'compact' } as const, false)
 const COMPACT = 'compact'
 
@@ -36,15 +36,26 @@ export function moveSection(ids: string[], id: string, step: -1 | 1): string[] {
   return moved
 }
 
+// The footer, not the band above the prompt: that band draws one plugin's tree only, and other mods take it.
+export const footerOf = (list: StarboardSection[]): string =>
+  ['⇥ /starboard', ...list.map(section => (section.summary ? `${section.title} ${section.summary}` : section.title))].join(' · ')
+
+async function showFooter($: EngineInterface) {
+  if (!(await read($, compact))) return
+  $.ui.status(footerOf(sortSections(await read($, sections), await read($, layout))))
+}
+
 async function fold($: EngineInterface) {
   await update($, compact, () => true)
   await $.store.set(COMPACT, true)
   await $.ui.close({ id: PANE })
+  await showFooter($)
 }
 
 async function unfold($: EngineInterface) {
   await update($, compact, () => false)
   await $.store.set(COMPACT, false)
+  $.ui.status(undefined)
   await $.ui.open({ id: PANE, title: 'Starboard' })
 }
 
@@ -57,6 +68,7 @@ export const register: Register = on => {
 
   on('starboard.publish', async ($, section) => {
     await update($, sections, all => ({ ...all, [section.id]: section }))
+    await showFooter($)
     return { value: undefined }
   })
 
@@ -65,6 +77,7 @@ export const register: Register = on => {
       const { [id]: _, ...rest } = all
       return rest
     })
+    await showFooter($)
     return { value: undefined }
   })
 
@@ -115,7 +128,7 @@ export const register: Register = on => {
 
     const compactButton = (
       <Box flexDirection="row" justifyContent="flex-end">
-        <Button key="fold" plain label="Rabattre le panneau en une ligne au-dessus du prompt" onPress={() => fold($)}>
+        <Button key="fold" plain label="Rabattre le panneau dans le footer" onPress={() => fold($)}>
           <Text dimColor>⇤</Text>
         </Button>
       </Box>
@@ -169,29 +182,6 @@ export const register: Register = on => {
             </Box>
           )
         })}
-      </Box>
-    )
-  })
-
-  // Folded away, the sections live on one line above the prompt: title and summary on each one's pastel.
-  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    if (e.props.hasSurvey || !(await read($, compact))) return next(e)
-    const { Box, Text, Button } = $.ui.resolve(e)
-    const list = sortSections(await read($, sections), await read($, layout))
-    return (
-      <Box flexDirection="row" gap={1}>
-        {list.map(section => {
-          const card = cardOf(section.id)
-          return (
-            <Box flexDirection="row" gap={1} backgroundColor={card.background} paddingX={1} flexShrink={1}>
-              <Text bold color={card.title} wrap="truncate-end">{section.title}</Text>
-              {section.summary && <Text color={INK.dim} wrap="truncate-end">{section.summary}</Text>}
-            </Box>
-          )
-        })}
-        <Button key="unfold" plain label="Rouvrir le panneau latéral" onPress={() => unfold($)}>
-          <Text dimColor>⇥</Text>
-        </Button>
       </Box>
     )
   })
