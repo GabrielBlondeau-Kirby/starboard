@@ -7,11 +7,31 @@ import { cardOf, INK, MARK_INK } from './palette'
 const PANE = 'starboard'
 const sections = atom({ plugin: 'starboard', key: 'sections' } as const, {})
 const collapsed = atom({ plugin: 'starboard', key: 'collapsed' } as const, {})
+// The order the person chose with ▲ ▼, kept across sessions; sections it does not name follow their own `order`.
+const layout = atom({ plugin: 'starboard', key: 'layout' } as const, [])
+const LAYOUT = 'layout'
 
 const MARKS: Record<StarboardStatus, string> = { ok: '●', warn: '●', error: '●', off: '○' }
 
-export const sortSections = (all: Record<string, StarboardSection>): StarboardSection[] =>
-  Object.values(all).sort((a, b) => (a.order ?? 100) - (b.order ?? 100) || a.title.localeCompare(b.title))
+export function sortSections(all: Record<string, StarboardSection>, chosen: string[] = []): StarboardSection[] {
+  const byDefault = Object.values(all).sort((a, b) => (a.order ?? 100) - (b.order ?? 100) || a.title.localeCompare(b.title))
+  const rank = (section: StarboardSection) => {
+    const index = chosen.indexOf(section.id)
+    return index >= 0 ? index : chosen.length + byDefault.indexOf(section)
+  }
+  return byDefault.sort((a, b) => rank(a) - rank(b))
+}
+
+// Swaps a section with its neighbour; the whole shown order is kept, so the next session finds it as is.
+export function moveSection(ids: string[], id: string, step: -1 | 1): string[] {
+  const from = ids.indexOf(id)
+  const to = from + step
+  if (from < 0 || to < 0 || to >= ids.length) return ids
+  const moved = [...ids]
+  moved[from] = ids[to] ?? id
+  moved[to] = id
+  return moved
+}
 
 export const register: Register = on => {
   // `$.starboard` is a noun: each call raises `starboard.publish` / `starboard.remove`, answered below with our own `$`.
@@ -34,19 +54,31 @@ export const register: Register = on => {
   })
 
   on('session.start', async ($, e, next) => {
-    await $.command.register({ name: 'starboard', description: 'Ouvre le panneau latéral des mods' })
+    await $.command.register({ name: 'starboard', description: 'Ouvre le panneau latéral des mods ; /starboard reset rend aux sections leur ordre par défaut' })
+    const saved = await $.store.get(LAYOUT)
+    if (Array.isArray(saved)) await update($, layout, () => saved.filter((id): id is string => typeof id === 'string'))
     void $.ui.open({ id: PANE, title: 'Starboard' })
     return next(e)
   })
 
-  on('command.run', { command: 'starboard' }, async $ => {
+  on('command.run', { command: 'starboard' }, async ($, e) => {
+    if (e.args.trim().toLowerCase() === 'reset') {
+      await update($, layout, () => [])
+      await $.store.set(LAYOUT, [])
+      return { text: 'Sections remises dans leur ordre par défaut.' }
+    }
     await $.ui.open({ id: PANE, title: 'Starboard' })
     return { text: 'Panneau latéral ouvert.' }
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Text, Button, Link } = $.ui.resolve(e)
-    const list = sortSections(await read($, sections))
+    const list = sortSections(await read($, sections), await read($, layout))
+    const move = async (id: string, step: -1 | 1) => {
+      const next = moveSection(list.map(section => section.id), id, step)
+      await update($, layout, () => next)
+      await $.store.set(LAYOUT, next)
+    }
     const folded = await read($, collapsed)
 
     // Mirrors the desktop app's own sidebar: one rounded card per section, the title with its caret,
@@ -68,7 +100,7 @@ export const register: Register = on => {
     return (
       <Box flexDirection="column" gap="sm">
         {list.length === 0 && <Text dimColor>Aucune section publiée pour l'instant.</Text>}
-        {list.map(section => {
+        {list.map((section, index) => {
           const isFolded = folded[section.id] === true
           const card = cardOf(section.id)
           return (
@@ -95,6 +127,16 @@ export const register: Register = on => {
                       <Text color={INK.link}>{action.label}</Text>
                     </Button>
                   ))}
+                  {index > 0 && (
+                    <Button key={`up-${section.id}`} plain label={`Monter ${section.title}`} onPress={() => move(section.id, -1)}>
+                      <Text color={INK.dim}>▲</Text>
+                    </Button>
+                  )}
+                  {index < list.length - 1 && (
+                    <Button key={`down-${section.id}`} plain label={`Descendre ${section.title}`} onPress={() => move(section.id, 1)}>
+                      <Text color={INK.dim}>▼</Text>
+                    </Button>
+                  )}
                 </Box>
               </Box>
               {!isFolded && section.rows.map(row)}
