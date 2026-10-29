@@ -13,9 +13,10 @@ const CONFIG = '.claude/todo.json'
 const POLL_MS = 10000
 const MAX_ROWS = 8
 const MAX_CONTEXT = 25
-// Looked for, case-insensitively, at the project root and in docs/ when no source is configured.
+// Looked for, case-insensitively, in a folder and its docs/ when no source is configured.
 const CANDIDATES = ['todo.md', 'tasks.md', 'a-faire.md', 'a_faire.md', 'backlog.md']
 const DIRS = ['', 'docs']
+const SKIPPED = new Set(['node_modules', 'dist', 'build', 'out'])
 
 const list = atom({ plugin: 'tasks', key: 'list' } as const, [])
 const sources = atom({ plugin: 'tasks', key: 'sources' } as const, [])
@@ -78,21 +79,60 @@ export function tickLine(line: string, done: boolean): string {
 
 // ---- Sources ------------------------------------------------------------------------------
 
+// Paths are absolute, under the folder the session works in now: Claude moves between projects during
+// a session, and a session opened on a folder of projects has its to-do files one level down.
+const norm = (path: string) => path.replace(/\\/g, '/')
+const join = (dir: string, name: string) => (name ? `${norm(dir).replace(/\/+$/, '')}/${name}` : norm(dir))
+const isAbsolute = (path: string) => /^([A-Za-z]:)?\//.test(norm(path))
+
+/** The folder above, or undefined at a root; `E:` alone would be drive-relative, so `E:/` it is. */
+export function parentOf(dir: string): string | undefined {
+  const d = norm(dir).replace(/\/+$/, '')
+  const cut = d.lastIndexOf('/')
+  if (cut < 0) return undefined
+  const up = d.slice(0, cut)
+  return up === '' ? '/' : /^[A-Za-z]:$/.test(up) ? `${up}/` : up
+}
+
+let base = ''
+
+/** A path as the person reads it: relative to the session's folder when under it. */
+export const shown = (path: string, from = base) => {
+  const root = `${norm(from).replace(/\/+$/, '')}/`
+  return norm(path).startsWith(root) ? norm(path).slice(root.length) : norm(path)
+}
+
 async function configured($: Engine): Promise<string[] | undefined> {
   try {
-    const { sources: named } = JSON.parse(await $.fs.read(CONFIG)) as { sources?: string[] }
-    return named?.length ? named : undefined
+    const { sources: named } = JSON.parse(await $.fs.read(join(base, CONFIG))) as { sources?: string[] }
+    return named?.length ? named.map(path => (isAbsolute(path) ? norm(path) : join(base, path))) : undefined
   } catch {
     return undefined
   }
 }
 
-async function discover($: Engine): Promise<string[]> {
+async function candidatesIn($: Engine, dir: string): Promise<string[]> {
   const found: string[] = []
-  for (const dir of DIRS) {
-    const entries = await $.fs.list(dir || '.').catch(() => [])
-    for (const entry of entries) {
-      if (entry.kind === 'file' && CANDIDATES.includes(entry.name.toLowerCase())) found.push(dir ? `${dir}/${entry.name}` : entry.name)
+  for (const sub of DIRS) {
+    const at = join(dir, sub)
+    for (const entry of await $.fs.list(at).catch(() => [])) {
+      if (entry.kind === 'file' && CANDIDATES.includes(entry.name.toLowerCase())) found.push(join(at, entry.name))
+    }
+  }
+  return found
+}
+
+/** The session's folder and its parents first, as CLAUDE.md is found (a session opened inside a
+ *  project); failing that, the projects one level down (a session opened on a folder of projects). */
+async function discover($: Engine): Promise<string[]> {
+  for (let dir: string | undefined = base; dir; dir = parentOf(dir)) {
+    const found = await candidatesIn($, dir)
+    if (found.length) return found
+  }
+  const found: string[] = []
+  for (const entry of await $.fs.list(base).catch(() => [])) {
+    if (entry.kind === 'dir' && !entry.name.startsWith('.') && !SKIPPED.has(entry.name)) {
+      found.push(...(await candidatesIn($, join(base, entry.name))))
     }
   }
   return found
@@ -100,6 +140,7 @@ async function discover($: Engine): Promise<string[]> {
 
 /** Configured sources, a directory standing for its Markdown files; else what discovery finds. */
 async function resolveSources($: Engine): Promise<string[]> {
+  base = norm(await $.session.cwd())
   const named = await configured($)
   if (!named) return discover($)
   const files: string[] = []
@@ -107,7 +148,7 @@ async function resolveSources($: Engine): Promise<string[]> {
     const stat = await $.fs.stat(path).catch(() => undefined)
     if (stat?.kind === 'dir') {
       const entries = await $.fs.list(path)
-      files.push(...entries.filter(e => e.kind === 'file' && /\.md$/i.test(e.name)).map(e => `${path.replace(/[\\/]$/, '')}/${e.name}`))
+      files.push(...entries.filter(e => e.kind === 'file' && /\.md$/i.test(e.name)).map(e => join(path, e.name)))
     } else if (stat) files.push(path)
   }
   return files
@@ -170,21 +211,21 @@ async function setDone($: Engine, n: number, done: boolean): Promise<string> {
   // The numbers come from the last read: if the file moved since, refuse rather than tick the wrong line.
   if (!line || !line.includes(task.title)) {
     await load($, true)
-    return `${task.source} changed since it was read; numbers are refreshed, run /todo and try again.`
+    return `${shown(task.source)} changed since it was read; numbers are refreshed, run /todo and try again.`
   }
   lines[task.line] = tickLine(line, done)
   await $.fs.write(task.source, lines.join('\n'))
   await load($, true)
-  return `${done ? 'Ticked' : 'Unticked'} #${n} ${task.title} in ${task.source}.`
+  return `${done ? 'Ticked' : 'Unticked'} #${n} ${task.title} in ${shown(task.source)}.`
 }
 
 async function add($: Engine, text: string): Promise<string> {
   const files = await read($, sources)
-  const target = files[0] ?? 'TODO.md'
+  const target = files[0] ?? join(base, 'TODO.md')
   const before = await $.fs.read(target).catch(() => '# TODO\n')
   await $.fs.write(target, `${before.replace(/\s*$/, '\n')}- [ ] ${text}\n`)
   await load($, true)
-  return `Added to ${target}: ${text}`
+  return `Added to ${shown(target)}: ${text}`
 }
 
 // A press and its hotkey, or the mod loaded twice (a dev copy beside the installed one), each start
@@ -205,12 +246,13 @@ async function start($: Engine, n: number): Promise<string> {
 }
 
 async function setSources($: Engine, paths: string[]): Promise<string> {
-  await $.fs.write(CONFIG, `${JSON.stringify({ sources: paths }, null, 2)}\n`)
+  base = norm(await $.session.cwd())
+  await $.fs.write(join(base, CONFIG), `${JSON.stringify({ sources: paths }, null, 2)}\n`)
   await load($, true)
   const files = await read($, sources)
   return paths.length
-    ? `Sources saved in ${CONFIG}: ${files.join(', ') || 'none readable'}.`
-    : `Sources reset: discovery finds ${files.join(', ') || 'nothing'}.`
+    ? `Sources saved in ${CONFIG}: ${files.map(f => shown(f)).join(', ') || 'none readable'}.`
+    : `Sources reset: discovery finds ${files.map(f => shown(f)).join(', ') || 'nothing'}.`
 }
 
 const USAGE = [
@@ -230,8 +272,8 @@ async function run($: Engine, args: string): Promise<string> {
     case 'all': {
       const files = await read($, sources)
       if (!files.length) return `No to-do file found. Name one with /todo source <path>.\n\n${USAGE}`
-      const shown = verb === 'all' ? current : openOf(current)
-      return `${files.join(', ')} — ${openOf(current).length} open\n\n${shown.map(describe).join('\n') || 'Nothing left to do.'}`
+      const picked = verb === 'all' ? current : openOf(current)
+      return `${files.map(f => shown(f)).join(', ')} — ${openOf(current).length} open\n\n${picked.map(describe).join('\n') || 'Nothing left to do.'}`
     }
     case 'do':
       return start($, n)

@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { parseTasks, splitTitle, tickLine } from '../hooks/register'
+import { parentOf, parseTasks, shown, splitTitle, tickLine } from '../hooks/register'
 
 const TODO = [
   '# À faire',
@@ -39,18 +39,26 @@ test('ticking keeps the line and adds a missing box', async () => {
   expect(tickLine('- write it', true)).toBe('- [x] write it')
 })
 
-// The engine hands hooks absolute paths, under the test's working directory (the mod folder).
-const rel = (path: string) => path.replace(/\\/g, '/').replace(/^.*\/tasks(\/|$)/, '').replace(/\/$/, '')
+// A disk under /w: the mod builds absolute paths from the session's folder, and the engine may hand
+// them to the hooks with a drive letter in front on Windows.
+const rel = (path: string) => path.replace(/\\/g, '/').replace(/^([A-Za-z]:)?\/w(\/|$)/, '').replace(/\/$/, '')
 
 type Body = Extract<Parameters<typeof test>[1], (...args: never[]) => unknown>
 type On = Parameters<Body>[1]
 
-function memoryFs(on: On, files: Record<string, string>) {
+/** `files` keyed by their path under /w; `cwd` is the session's folder, under /w too. */
+function memoryFs(on: On, files: Record<string, string>, cwd = '') {
   const missing = () => Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+  on('session.cwd', () => ({ value: cwd ? `/w/${cwd}` : '/w' }))
   on('fs.list', (_, e) => {
     const dir = rel(e.path)
-    const names = Object.keys(files).filter(p => (dir ? p.startsWith(`${dir}/`) : true) && !p.slice(dir ? dir.length + 1 : 0).includes('/'))
-    return { value: names.map(p => ({ name: p.split('/').pop()!, kind: 'file' as const, size: files[p]?.length ?? 0, mtimeMs: 0, isLink: false })) }
+    const entries = new Map<string, 'file' | 'dir'>()
+    for (const p of Object.keys(files)) {
+      if (dir && !p.startsWith(`${dir}/`)) continue
+      const [name = '', ...deeper] = p.slice(dir ? dir.length + 1 : 0).split('/')
+      entries.set(name, deeper.length ? 'dir' : 'file')
+    }
+    return { value: [...entries].map(([name, kind]) => ({ name, kind, size: 0, mtimeMs: 0, isLink: false })) }
   })
   on('fs.stat', (_, e) => {
     const path = rel(e.path)
@@ -108,4 +116,42 @@ test('/todo source takes a folder for its Markdown files', async ($, on) => {
   expect(listed.text).toContain('#1 [ ] One')
   expect(listed.text).toContain('#2 [ ] Two')
   expect(listed.text).not.toContain('c.txt')
+})
+const session = async ($: Parameters<Body>[0], on: On) => {
+  on('command.register', (_, e) => ({ value: { command: e.name } }))
+  on('clock.every', () => ({ value: undefined }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  await $.session.start({ cwd: '/w', surface: 'terminal', isInteractive: true })
+  return (args: string) => $.command.run({ command: 'todo', args } as never)
+}
+
+test('a session opened on a folder of projects finds them one level down', async ($, on) => {
+  const files: Record<string, string> = { 'inundatio/docs/TODO.md': TODO, 'inundatio/README.md': '#', 'node_modules/x/TODO.md': '- [ ] no' }
+  memoryFs(on, files)
+  const todo = await session($, on)
+  const listed = await todo('')
+  expect(listed.text).toContain('inundatio/docs/TODO.md — 2 open')
+  expect(listed.text).not.toContain('node_modules')
+  await todo('done 3')
+  expect(files['inundatio/docs/TODO.md']?.split('\n')[5]).toBe('- [x] Short durations: 15, 30, 60, 120 s')
+})
+
+test('a session opened inside a project finds the to-do file above it', async ($, on) => {
+  const files: Record<string, string> = { 'inundatio/TODO.md': TODO, 'inundatio/travail/notes.md': '- [ ] nope' }
+  memoryFs(on, files, 'inundatio/travail')
+  const todo = await session($, on)
+  const listed = await todo('')
+  expect(listed.text).toContain('/w/inundatio/TODO.md — 2 open')
+  await todo('done 2')
+  expect(files['inundatio/TODO.md']?.split('\n')[3]).toMatch(/^- \[x\] \*\*Chapters/)
+})
+
+test('parentOf stops at a root and keeps the drive', async () => {
+  expect(parentOf('E:\\KirbyeProjects\\inundatio')).toBe('E:/KirbyeProjects')
+  expect(parentOf('E:/KirbyeProjects')).toBe('E:/')
+  expect(parentOf('E:/')).toBe(undefined)
+  expect(parentOf('/home/k')).toBe('/home')
+  expect(parentOf('/home')).toBe('/')
+  expect(parentOf('/')).toBe(undefined)
+  expect(shown('/w/inundatio/docs/TODO.md', '/w')).toBe('inundatio/docs/TODO.md')
 })

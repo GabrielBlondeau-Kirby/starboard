@@ -15,8 +15,13 @@ Reads a project's to-do files and keeps them in front of you and of Claude:
 
 ## Where the tasks come from
 
-With no configuration, the mod looks at the project root and in `docs/` for, case-insensitively,
-`TODO.md`, `TASKS.md`, `A-FAIRE.md`, `A_FAIRE.md` or `BACKLOG.md`.
+With no configuration, the mod looks for, case-insensitively, `TODO.md`, `TASKS.md`, `A-FAIRE.md`,
+`A_FAIRE.md` or `BACKLOG.md`, in a folder and its `docs/`:
+
+1. the folder the session works in now (it follows Claude from one project to another), then each
+   folder above it, as CLAUDE.md is found — a session opened inside a project;
+2. failing that, each project one level down — a session opened on a folder of projects
+   (`node_modules`, `dist`, `build`, `out` and hidden folders are skipped).
 
 To name the sources yourself — files or folders, a folder standing for its `.md` files:
 
