@@ -43,9 +43,6 @@ export function parseRemote(url: string): Remote | undefined {
   return undefined
 }
 
-export const pullRequestUrl = (remote: Remote, id: number): string =>
-  `https://dev.azure.com/${remote.org}/${encodeURIComponent(remote.project)}/_git/${encodeURIComponent(remote.repo)}/pullrequest/${id}`
-
 export const tokenFromEnvFile = (text: string): string | undefined =>
   /^\s*(?:export\s+)?AZURE_ACCESS_TOKEN\s*=\s*["']?([^"'\s#]+)/m.exec(text)?.[1]
 
@@ -142,10 +139,11 @@ export async function describeCi($: Engine): Promise<Report | undefined> {
       $, auth, remote, `build/builds?branchName=${buildRef}&$top=10&queryOrder=queueTimeDescending`,
     )
     const where = pr ? `PR ${pr}` : branch
-    const prRow: StarboardRow = { label: 'pr', value: pr ? `#${pr}` : 'aucune', dim: !pr, href: pr ? pullRequestUrl(remote, pr) : undefined }
+    // The PR itself (link, state, review) is workspace-info's: only its number, in the summary.
+    const tag = pr ? `PR ${pr} · ` : ''
     const [latest] = recent
     if (!latest) {
-      return { line: `CI ○ ${where} · aucun build`, rows: [prRow, { label: 'build', value: 'aucun', status: 'off', dim: true }] }
+      return { line: `CI ○ ${where} · aucun build`, summary: pr ? `PR ${pr}` : undefined, rows: [{ label: 'build', value: 'aucun', status: 'off', dim: true }] }
     }
 
     // The latest commit's builds, one per pipeline.
@@ -160,7 +158,6 @@ export async function describeCi($: Engine): Promise<Report | undefined> {
       : []
 
     const rows: StarboardRow[] = [
-      prRow,
       ...builds.map((b): StarboardRow => ({
         label: b.definition.name,
         value: `${b.status === 'completed' ? (b.result ?? 'terminé') : b.status === 'notStarted' ? 'en attente' : 'en cours'} · ${minutes(b.startTime ?? b.queueTime, b.finishTime)}`,
@@ -174,7 +171,7 @@ export async function describeCi($: Engine): Promise<Report | undefined> {
     const line = state === 'running' ? `CI ⏳ ${where} · ${elapsed}`
       : state === 'failed' ? `CI ❌ ${failed.slice(0, 2).join(', ') || where}`
       : `CI ✅ ${where}`
-    return { line, summary: state === 'running' ? `⏳ ${elapsed}` : state === 'failed' ? '❌' : '✅', rows }
+    return { line, summary: `${tag}${state === 'running' ? `⏳ ${elapsed}` : state === 'failed' ? '❌' : '✅'}`, rows }
   } catch (error) {
     const status = error instanceof HttpError ? error.status : undefined
     const why = status === 401 || status === 203 ? 'PAT refusé' : status ? `HTTP ${status}` : 'Azure DevOps injoignable'

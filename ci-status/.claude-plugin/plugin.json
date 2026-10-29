@@ -2,6 +2,6 @@
   "license": "MIT",
   "author": { "name": "Gabriel Blondeau" },
   "name": "ci-status",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "État de la CI Azure DevOps de la branche courante : dans le panneau starboard s'il est installé, sinon dans le footer. /ci on|off"
 }
