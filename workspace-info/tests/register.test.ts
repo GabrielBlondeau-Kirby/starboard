@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { focusRows, jiraOf, parseRemote, pathsOf, reviewOf, stateOf, ticketRows } from '../hooks/register'
+import { focusRows, jiraOf, shortId, parseRemote, pathsOf, reviewOf, stateOf, ticketRows } from '../hooks/register'
 
 const GIT: Record<string, string> = {
   'rev-parse --show-toplevel': '/repo/hap-pay-12',
@@ -122,4 +122,9 @@ test('working in another worktree than the session warns, until it is old news',
   expect(focusRows(focus, '/src/shop-x', 1000)).toEqual([])
   expect(focusRows(focus, '/src/shop', 31 * 60 * 1000)).toEqual([])
   expect(focusRows(undefined, '/src/shop', 0)).toEqual([])
+})
+
+test('the session id is cut to its first block', () => {
+  expect(shortId('ccb6372d-d5ee-4cae-a254-e3e226c70fdb')).toBe('ccb6372d')
+  expect(shortId('plain')).toBe('plain')
 })

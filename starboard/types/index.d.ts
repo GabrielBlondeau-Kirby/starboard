@@ -44,6 +44,7 @@ declare module 'claude-code' {
       sections: Record<string, StarboardSection>
       collapsed: Record<string, boolean>
       layout: string[]
+      compact: boolean
     }
   }
 }
