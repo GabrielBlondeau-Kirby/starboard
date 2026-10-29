@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { parentOf, parseTasks, shown, splitTitle, tickLine } from '../hooks/register'
+import { isInside, parentOf, parseTasks, shown, splitTitle, tickLine } from '../hooks/register'
 
 const TODO = [
   '# À faire',
@@ -46,10 +46,12 @@ const rel = (path: string) => path.replace(/\\/g, '/').replace(/^([A-Za-z]:)?\/w
 type Body = Extract<Parameters<typeof test>[1], (...args: never[]) => unknown>
 type On = Parameters<Body>[1]
 
-/** `files` keyed by their path under /w; `cwd` is the session's folder, under /w too. */
-function memoryFs(on: On, files: Record<string, string>, cwd = '') {
+/** `files` keyed by their path under /w; `cwd` is the session's folder and `root` its project root,
+ *  under /w too (the root defaults to /w itself). */
+function memoryFs(on: On, files: Record<string, string>, cwd = '', root = '') {
   const missing = () => Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
   on('session.cwd', () => ({ value: cwd ? `/w/${cwd}` : '/w' }))
+  on('session.root', () => ({ value: root ? `/w/${root}` : '/w' }))
   on('fs.list', (_, e) => {
     const dir = rel(e.path)
     const entries = new Map<string, 'file' | 'dir'>()
@@ -154,4 +156,46 @@ test('parentOf stops at a root and keeps the drive', async () => {
   expect(parentOf('/home')).toBe('/')
   expect(parentOf('/')).toBe(undefined)
   expect(shown('/w/inundatio/docs/TODO.md', '/w')).toBe('inundatio/docs/TODO.md')
+})
+
+test('discovery stops at the session root', async ($, on) => {
+  const files: Record<string, string> = { 'TODO.md': TODO, 'starboard/README.md': '#' }
+  memoryFs(on, files, 'starboard', 'starboard')
+  const todo = await session($, on)
+  expect((await todo('')).text).toContain('No to-do file found')
+})
+
+test('a configured source outside the session is ignored', async ($, on) => {
+  const files: Record<string, string> = {
+    'starboard/.claude/todo.json': JSON.stringify({ sources: ['/w/inundatio/docs/TODO.md', 'TODO.md'] }),
+    'starboard/TODO.md': '- [ ] **Mine.**',
+    'inundatio/docs/TODO.md': TODO,
+  }
+  memoryFs(on, files, 'starboard', 'starboard')
+  const todo = await session($, on)
+  const listed = await todo('')
+  expect(listed.text).toContain('#1 [ ] Mine')
+  expect(listed.text).not.toContain('Chapters')
+  expect((await todo('source /w/inundatio/docs/TODO.md')).text).toContain('Ignored, outside the session: /w/inundatio/docs/TODO.md')
+})
+
+test('a folder added with /add-dir joins the session', async ($, on) => {
+  const files: Record<string, string> = {
+    'starboard/.claude/todo.json': JSON.stringify({ sources: ['/w/inundatio/docs/TODO.md'] }),
+    'inundatio/docs/TODO.md': TODO,
+  }
+  memoryFs(on, files, 'starboard', 'starboard')
+  on('classic.DirectoryAdded', () => ({}))
+  const todo = await session($, on)
+  expect((await todo('')).text).toContain('No to-do file found')
+  await $.classic.DirectoryAdded({ directory: '/w/inundatio', source: 'slash_command' })
+  expect((await todo('')).text).toContain('2 open')
+})
+
+test('isInside: under a root, the drive case aside, no ".." escape', async () => {
+  expect(isInside('E:/KirbyeProjects/starboard/TODO.md', ['e:\\KirbyeProjects\\starboard'])).toBe(true)
+  expect(isInside('E:/KirbyeProjects/starboard', ['E:/KirbyeProjects/starboard/'])).toBe(true)
+  expect(isInside('E:/KirbyeProjects/starboard-old/TODO.md', ['E:/KirbyeProjects/starboard'])).toBe(false)
+  expect(isInside('E:/KirbyeProjects/starboard/../inundatio/TODO.md', ['E:/KirbyeProjects/starboard'])).toBe(false)
+  expect(isInside('/anything', ['/'])).toBe(true)
 })
