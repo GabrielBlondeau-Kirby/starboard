@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { formatSize, groupStacks, levelOf, parseSize, prefixesOf } from '../hooks/register'
+import { formatSize, groupStacks, isLinked, levelOf, orphansOf, parseSize, prefixesOf, slugOf } from '../hooks/register'
 
 const GIB = 1024 ** 3
 const MIB = 1024 ** 2
@@ -27,6 +27,12 @@ function stub(on: Parameters<Parameters<typeof test>[1]>[1], docker: () => Docke
   on('clock.every', () => ({ value: { cancel: () => {} } }))
   on('command.register', () => ({ value: undefined }))
   on('command.run', () => ({ text: '' }))
+  const store: Record<string, unknown> = {}
+  on('store.get', (_, e) => ({ value: store[e.key] }))
+  on('store.set', (_, e) => {
+    store[e.key] = e.value
+    return { value: undefined }
+  })
   on('ui.status', (_, e) => {
     statuses.push(e.text)
     return { value: undefined }
@@ -100,4 +106,29 @@ test('a stopped Docker says so instead of failing', async ($, on) => {
 
   expect((await $.command.run({ command: 'docker', args: '' })).text).toBe('Docker indisponible')
   expect(statuses.at(-1)).toBe(undefined)
+})
+
+test('a stack belongs to the session by its worktree or by the branch in its name', () => {
+  const session = { top: '/src/shop-PAY-12', branch: 'feature/PAY-12-refund' }
+  expect(slugOf('feature/PAY-12-refund')).toBe('feature-pay-12-refund')
+  expect(isLinked({ project: 'docker', name: 'shop-core', dir: '/src/shop-PAY-12/docker' }, session)).toBe(true)
+  expect(isLinked({ project: 'shop-feature-pay-12-refund-fakepsp', name: 'x', dir: '/src/FakePSP/docker' }, session)).toBe(true)
+  expect(isLinked({ project: 'docker', name: 'shop-core', dir: '/src/shop/docker' }, session)).toBe(false)
+  expect(isLinked({ project: 'shop-feature-pay-123-other', name: 'x', dir: '/src/shop-PAY-123/docker' }, session)).toBe(false)
+})
+
+test('an orphan is a stack whose folder is gone, with the stacks named after it', () => {
+  const containers = [
+    { project: 'shop-feature-x', name: 'a', dir: '/src/shop-x/docker' },
+    { project: 'shop-feature-x-fakepsp', name: 'b', dir: '/src/FakePSP/docker' },
+    { project: 'shop-feature-y', name: 'c', dir: '/src/shop-y/docker' },
+    { project: 'other', name: 'd', dir: '/gone/other' },
+    { project: '', name: 'lonely' },
+  ]
+  const missing = new Set(['/src/shop-x/docker', '/gone/other'])
+
+  expect(orphansOf(containers, missing, ['shop-'])).toEqual(['shop-feature-x', 'shop-feature-x-fakepsp'])
+  expect(orphansOf(containers, missing, [])).toEqual(['other', 'shop-feature-x', 'shop-feature-x-fakepsp'])
+  // A shared stack gone ("shop", from a removed fake's folder) does not take the branch stacks with it.
+  expect(orphansOf([...containers, { project: 'shop', name: 'e', dir: '/gone/fake' }], new Set(['/gone/fake']), ['shop'])).toEqual(['shop'])
 })

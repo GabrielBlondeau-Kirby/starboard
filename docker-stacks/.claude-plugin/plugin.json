@@ -2,7 +2,7 @@
   "license": "MIT",
   "author": { "name": "Gabriel Blondeau" },
   "name": "docker-stacks",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Stacks Docker Compose actives et leur mémoire, avec une alerte quand la VM Docker approche de la saturation : dans le panneau starboard s'il est installé, sinon dans le footer. /docker",
   "userConfig": {
     "prefixes": {

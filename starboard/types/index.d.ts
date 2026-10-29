@@ -9,6 +9,16 @@ export type StarboardRow = {
   href?: string
 }
 
+/** A button in the section header: runs `/command args` as if the person typed it. */
+export type StarboardAction = {
+  /** One or two characters, an icon ("🧹", "◎"). */
+  label: string
+  /** Names the button for screen readers and the hover hint. */
+  hint: string
+  command: string
+  args?: string
+}
+
 export type StarboardSection = {
   id: string
   title: string
@@ -17,6 +27,7 @@ export type StarboardSection = {
   /** Short text on the right of the header, shown folded or not ("11 %", "2 actifs"). */
   summary?: string
   note?: string
+  actions?: StarboardAction[]
 }
 
 export type Starboard = {
