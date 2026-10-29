@@ -2,7 +2,7 @@
   "license": "MIT",
   "author": { "name": "Gabriel Blondeau" },
   "name": "tasks",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Reads a project's to-do files (TODO.md, docs/A-FAIRE.md…): a starboard section, a band with the next task, /tasks to run, tick and add, and the open tasks in Claude's context",
   "types": "./types/index.d.ts"
 }

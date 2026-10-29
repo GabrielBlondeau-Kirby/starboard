@@ -19,9 +19,13 @@ With no configuration, the mod looks for, case-insensitively, `TODO.md`, `TASKS.
 `A_FAIRE.md` or `BACKLOG.md`, in a folder and its `docs/`:
 
 1. the folder the session works in now (it follows Claude from one project to another), then each
-   folder above it, as CLAUDE.md is found — a session opened inside a project;
+   folder above it up to the session's root, as CLAUDE.md is found — a session opened inside a project;
 2. failing that, each project one level down — a session opened on a folder of projects
    (`node_modules`, `dist`, `build`, `out` and hidden folders are skipped).
+
+Only the session's own folders are read: its root, the folder it works in now, and the folders
+added with `/add-dir`. A to-do file elsewhere — above the root, in another project — is not shown,
+even when `.claude/todo.json` names it.
 
 To name the sources yourself — files or folders, a folder standing for its `.md` files:
 

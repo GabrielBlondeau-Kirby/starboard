@@ -95,6 +95,31 @@ export function parentOf(dir: string): string | undefined {
 }
 
 let base = ''
+// The session's environment: its root, the folder it works in now, the folders /add-dir added.
+// Discovery and configured sources stay inside it, so one project's tasks do not leak into another.
+let roots: string[] = []
+const added = new Set<string>()
+
+/** A path compared as a path: `.` and `..` resolved, no trailing slash, case folded under a drive
+ *  letter (Windows paths are case-insensitive). */
+const key = (path: string) => {
+  const parts: string[] = []
+  for (const part of norm(path).split('/')) {
+    if (part === '..') parts.length > 1 && parts.pop()
+    else if (part !== '.' && (part || !parts.length)) parts.push(part)
+  }
+  const d = parts.join('/') || '/'
+  return /^[A-Za-z]:/.test(d) ? d.toLowerCase() : d
+}
+
+/** Whether `path` is one of the roots or under one. */
+export function isInside(path: string, within = roots): boolean {
+  const p = key(path)
+  return within.some(root => {
+    const r = key(root)
+    return p === r || p.startsWith(r.endsWith('/') ? r : `${r}/`)
+  })
+}
 
 /** A path as the person reads it: relative to the session's folder when under it. */
 export const shown = (path: string, from = base) => {
@@ -105,7 +130,7 @@ export const shown = (path: string, from = base) => {
 async function configured($: Engine): Promise<string[] | undefined> {
   try {
     const { sources: named } = JSON.parse(await $.fs.read(join(base, CONFIG))) as { sources?: string[] }
-    return named?.length ? named.map(path => (isAbsolute(path) ? norm(path) : join(base, path))) : undefined
+    return named?.length ? named.map(path => (isAbsolute(path) ? norm(path) : join(base, path))).filter(path => isInside(path)) : undefined
   } catch {
     return undefined
   }
@@ -122,10 +147,11 @@ async function candidatesIn($: Engine, dir: string): Promise<string[]> {
   return found
 }
 
-/** The session's folder and its parents first, as CLAUDE.md is found (a session opened inside a
- *  project); failing that, the projects one level down (a session opened on a folder of projects). */
+/** The session's folder and its parents up to the session's root, as CLAUDE.md is found (a session
+ *  opened inside a project); failing that, the projects one level down (a session opened on a folder
+ *  of projects). */
 async function discover($: Engine): Promise<string[]> {
-  for (let dir: string | undefined = base; dir; dir = parentOf(dir)) {
+  for (let dir: string | undefined = base; dir && isInside(dir); dir = parentOf(dir)) {
     const found = await candidatesIn($, dir)
     if (found.length) return found
   }
@@ -141,6 +167,7 @@ async function discover($: Engine): Promise<string[]> {
 /** Configured sources, a directory standing for its Markdown files; else what discovery finds. */
 async function resolveSources($: Engine): Promise<string[]> {
   base = norm(await $.session.cwd())
+  roots = [norm(await $.session.root()), base, ...added]
   const named = await configured($)
   if (!named) return discover($)
   const files: string[] = []
@@ -250,8 +277,10 @@ async function setSources($: Engine, paths: string[]): Promise<string> {
   await $.fs.write(join(base, CONFIG), `${JSON.stringify({ sources: paths }, null, 2)}\n`)
   await load($, true)
   const files = await read($, sources)
+  const outside = paths.filter(path => !isInside(isAbsolute(path) ? path : join(base, path)))
+  const ignored = outside.length ? ` Ignored, outside the session: ${outside.join(', ')}.` : ''
   return paths.length
-    ? `Sources saved in ${CONFIG}: ${files.map(f => shown(f)).join(', ') || 'none readable'}.`
+    ? `Sources saved in ${CONFIG}: ${files.map(f => shown(f)).join(', ') || 'none readable'}.${ignored}`
     : `Sources reset: discovery finds ${files.map(f => shown(f)).join(', ') || 'nothing'}.`
 }
 
@@ -295,6 +324,13 @@ export const register: Register = on => {
     await load($, true)
     $.clock.every(POLL_MS, () => void load($))
     return next(e)
+  })
+
+  on('classic.DirectoryAdded', async ($, e, next) => {
+    added.add(norm(e.directory))
+    const result = await next(e)
+    await load($, true)
+    return result
   })
 
   on('command.run', { command: 'todo' }, async ($, e) => ({ text: await run($, e.args) }))
