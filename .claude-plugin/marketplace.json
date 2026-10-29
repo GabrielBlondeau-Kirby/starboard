@@ -3,7 +3,7 @@
   "owner": { "name": "Gabriel Blondeau" },
   "plugins": [
     { "name": "starboard", "source": "./starboard", "description": "Panneau latéral qui regroupe les sections publiées par d'autres mods" },
-    { "name": "workspace-info", "source": "./workspace-info", "description": "Section branche, worktree et ticket Jira (footer sans starboard)" },
+    { "name": "workspace-info", "source": "./workspace-info", "description": "Section branche, worktree, ticket Jira et PR Azure DevOps (footer sans starboard)" },
     { "name": "tasks", "source": "./tasks", "description": "Section des tâches du projet (TODO.md, docs/A-FAIRE.md…), bandeau de la prochaine tâche, /todo, et tâches ouvertes dans le contexte de Claude" },
     { "name": "ci-status", "source": "./ci-status", "description": "Section CI : état de la CI Azure DevOps de la branche courante, étapes en échec, /ci on|off (footer sans starboard)" },
     { "name": "navi", "source": "./navi", "description": "« Hey, listen! » : panneau des sessions Claude Code locales et mise en relation de deux sessions par glisser-déposer" },

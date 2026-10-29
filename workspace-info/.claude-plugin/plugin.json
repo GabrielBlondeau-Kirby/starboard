@@ -2,8 +2,8 @@
   "license": "MIT",
   "author": { "name": "Gabriel Blondeau" },
   "name": "workspace-info",
-  "version": "0.2.0",
-  "description": "Branche, worktree et ticket Jira du dossier courant (titre, statut, lien vers le ticket) : dans le panneau starboard s'il est installé, sinon dans le footer",
+  "version": "0.3.0",
+  "description": "Branche, worktree, ticket Jira (titre, statut, lien) et PR Azure DevOps (lien, statut, approbation) du dossier courant : dans le panneau starboard s'il est installé, sinon dans le footer",
   "userConfig": {
     "jiraUrl": {
       "type": "string",

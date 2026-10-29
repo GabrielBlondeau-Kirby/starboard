@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { jiraOf, ticketRows } from '../hooks/register'
+import { jiraOf, parseRemote, reviewOf, stateOf, ticketRows } from '../hooks/register'
 
 const GIT: Record<string, string> = {
   'rev-parse --show-toplevel': '/repo/hap-pay-12',
@@ -63,4 +63,42 @@ test('a refused token keeps the key in the footer', { options: { ...JIRA, jiraUr
   stub(on, { status: 401, body: {} })
 
   expect(await footer($, on)).toBe('feature/PAY-12-refund · hap-pay-12 (lié) · PAY-12')
+})
+
+test('parses Azure DevOps remotes', () => {
+  expect(parseRemote('vs-ssh.visualstudio.com:v3/contoso/Contoso.Payments/Shop')).toEqual({ org: 'contoso', project: 'Contoso.Payments', repo: 'Shop' })
+  expect(parseRemote('git@github.com:someone/repo.git')).toBe(undefined)
+})
+
+test('a PR state has its icon', () => {
+  expect(stateOf({ pullRequestId: 1, status: 'completed' }).icon).toBe('✅')
+  expect(stateOf({ pullRequestId: 1, status: 'active', isDraft: true }).icon).toBe('📝')
+  expect(stateOf({ pullRequestId: 1, status: 'active' }).icon).toBe('⏳')
+})
+
+test('a review counts people, and waits for every required reviewer', () => {
+  const team = { vote: 10, isRequired: true, isContainer: true }
+  expect(reviewOf([{ vote: 10 }, team, { vote: 0 }])).toEqual({ label: 'revue', value: '✔ approuvée · 1/2', status: 'ok' })
+  expect(reviewOf([{ vote: 10 }, { vote: 0, isRequired: true }]).status).toBe('off')
+  expect(reviewOf([{ vote: 10 }, { vote: -10 }]).value).toBe('✖ rejetée · 1/2')
+  expect(reviewOf([]).value).toBe('○ pas encore approuvée')
+})
+
+test('the branch PR is a link with its state and review, never the PAT', async ($, on) => {
+  const urls: string[] = []
+  stub(on, { status: 200, body: { value: [
+    { pullRequestId: 7, status: 'abandoned' },
+    { pullRequestId: 9, status: 'active', isDraft: false, reviewers: [{ vote: 10 }, { vote: 0 }] },
+  ] } }, urls)
+  GIT['remote get-url origin'] = 'vs-ssh.visualstudio.com:v3/contoso/Contoso.Payments/Shop'
+  on('env.get', () => ({ value: 'secret-pat' }))
+  try {
+    const text = await footer($, on)
+
+    expect(text).toBe('feature/PAY-12-refund · hap-pay-12 (lié) · PAY-12 · ⏳ #9 · Active · ✔ approuvée · 1/2')
+    expect(urls[0]).toContain('/Contoso.Payments/_apis/git/repositories/Shop/pullRequests?searchCriteria.sourceRefName=refs%2Fheads%2Ffeature%2FPAY-12-refund&searchCriteria.status=all')
+    expect(text?.includes('secret-pat')).toBe(false)
+  } finally {
+    delete GIT['remote get-url origin']
+  }
 })

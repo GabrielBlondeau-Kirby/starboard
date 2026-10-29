@@ -8,12 +8,26 @@ type WithStarboard = Engine & { starboard: { publish: (section: StarboardSection
 export type Jira = { url?: string; email?: string; token?: string }
 type Issue = { summary: string; status: string; category?: string }
 type Lookup = { at: number; issue?: Issue; error?: string }
+export type Remote = { org: string; project: string; repo: string }
+export type Reviewer = { vote: number; isRequired?: boolean; isContainer?: boolean }
+export type PullRequest = { pullRequestId: number; status: string; isDraft?: boolean; reviewers?: Reviewer[] }
+type PrLookup = { at: number; pr?: PullRequest; error?: string }
 
 const SECTION = 'workspace-info'
 const POLL_MS = 15000
 const CACHE_MS = 5 * 60 * 1000
 const TICKET = /\b([A-Z][A-Z0-9]+-\d+)\b/
 const CATEGORY: Record<string, StarboardRow['status']> = { done: 'ok', indeterminate: 'warn', new: 'off' }
+const PR_CACHE_MS = 60 * 1000
+const API = 'api-version=7.1'
+
+// git@ssh.dev.azure.com:v3/org/project/repo, vs-ssh.visualstudio.com:v3/…, https://dev.azure.com/org/project/_git/repo,
+// https://org.visualstudio.com/project/_git/repo
+const REMOTES = [
+  /(?:ssh\.dev\.azure\.com|vs-ssh\.visualstudio\.com):v3\/([^/]+)\/([^/]+)\/([^/]+?)(?:\.git)?$/,
+  /dev\.azure\.com\/([^/]+)\/([^/]+)\/_git\/([^/]+?)(?:\.git)?$/,
+  /\/\/(?:[^@/]+@)?([^./]+)\.visualstudio\.com\/(?:DefaultCollection\/)?([^/]+)\/_git\/([^/]+?)(?:\.git)?$/,
+]
 
 export const ticketOf = (branch: string): string | undefined => TICKET.exec(branch.toUpperCase())?.[1]
 
@@ -68,11 +82,102 @@ export async function ticketRows($: Engine, jira: Jira, ticket: string | undefin
   ]
 }
 
+export function parseRemote(url: string): Remote | undefined {
+  for (const pattern of REMOTES) {
+    const [, org, project, repo] = pattern.exec(url) ?? []
+    if (org && project && repo) return { org, project: decodeURIComponent(project), repo: decodeURIComponent(repo) }
+  }
+  return undefined
+}
+
+export const tokenFromEnvFile = (text: string): string | undefined =>
+  /^\s*(?:export\s+)?AZURE_ACCESS_TOKEN\s*=\s*["']?([^"'\s#]+)/m.exec(text)?.[1]
+
+// The PAT never leaves this function except inside the Authorization header.
+async function findToken($: Engine, top: string): Promise<string | undefined> {
+  const fromEnv = await $.env.get('AZURE_ACCESS_TOKEN')
+  if (fromEnv) return fromEnv
+  const common = await git($, ['rev-parse', '--path-format=absolute', '--git-common-dir'])
+  for (const root of [top, common?.replace(/\/\.git\/?$/, '')]) {
+    if (!root) continue
+    try {
+      const token = tokenFromEnvFile(await $.fs.read(`${root}/docker/.env`))
+      if (token) return token
+    } catch {
+      // No docker/.env there: try the next place.
+    }
+  }
+  return undefined
+}
+
+const pullRequests = new Map<string, PrLookup>()
+
+// The open PR of the branch, else its latest one (completed or abandoned).
+async function fetchPullRequest($: Engine, remote: Remote, branch: string, token: string): Promise<PrLookup> {
+  const now = await $.clock.now()
+  const cacheKey = `${remote.org}/${remote.project}/${remote.repo}/${branch}`
+  const known = pullRequests.get(cacheKey)
+  if (known && now - known.at < PR_CACHE_MS) return known
+  let lookup: PrLookup
+  try {
+    const ref = encodeURIComponent(`refs/heads/${branch}`)
+    const url = `https://dev.azure.com/${remote.org}/${encodeURIComponent(remote.project)}/_apis/git/repositories/${encodeURIComponent(remote.repo)}`
+      + `/pullRequests?searchCriteria.sourceRefName=${ref}&searchCriteria.status=all&${API}`
+    const { ok, status, text: body } = await $.http.fetch(url, { headers: { Authorization: `Basic ${btoa(`:${token}`)}`, Accept: 'application/json' } })
+    // A wrong PAT answers 203 with the sign-in page instead of a 401.
+    if (!ok || status === 203) {
+      lookup = { at: now, error: status === 401 || status === 203 ? 'PAT Azure DevOps refusé' : `Azure DevOps HTTP ${status}` }
+    } else {
+      const all = (JSON.parse(body) as { value: PullRequest[] }).value.sort((a, b) => b.pullRequestId - a.pullRequestId)
+      lookup = { at: now, pr: all.find(pr => pr.status === 'active') ?? all[0] }
+    }
+  } catch {
+    lookup = { at: now, error: 'Azure DevOps injoignable' }
+  }
+  pullRequests.set(cacheKey, lookup)
+  return lookup
+}
+
+export function stateOf(pr: PullRequest): { icon: string; label: string; status: StarboardRow['status'] } {
+  if (pr.status === 'completed') return { icon: '✅', label: 'Completed', status: 'ok' }
+  if (pr.status === 'abandoned') return { icon: '✖', label: 'Abandoned', status: 'off' }
+  if (pr.isDraft) return { icon: '📝', label: 'Draft', status: 'off' }
+  return { icon: '⏳', label: 'Active', status: 'warn' }
+}
+
+// Azure DevOps votes: 10 approved, 5 approved with suggestions, 0 none, -5 waiting for author, -10 rejected.
+// A team reviewer (isContainer) carries its members' vote, so only people are counted.
+export function reviewOf(reviewers: Reviewer[] = []): StarboardRow {
+  const people = reviewers.filter(r => !r.isContainer)
+  const approvals = people.filter(r => r.vote >= 5).length
+  const count = people.length ? ` · ${approvals}/${people.length}` : ''
+  if (reviewers.some(r => r.vote === -10)) return { label: 'revue', value: `✖ rejetée${count}`, status: 'error' }
+  if (reviewers.some(r => r.vote === -5)) return { label: 'revue', value: `↺ attend l'auteur${count}`, status: 'warn' }
+  const approved = reviewers.some(r => r.vote >= 5) && reviewers.filter(r => r.isRequired).every(r => r.vote >= 5)
+  return approved ? { label: 'revue', value: `✔ approuvée${count}`, status: 'ok' } : { label: 'revue', value: `○ pas encore approuvée${count}`, status: 'off' }
+}
+
+export async function pullRequestRows($: Engine, top: string, branch: string): Promise<StarboardRow[]> {
+  const remote = parseRemote((await git($, ['remote', 'get-url', 'origin'])) ?? '')
+  // Not an Azure DevOps repository: no PR row.
+  if (!remote) return []
+  const token = await findToken($, top)
+  if (!token) return [{ label: 'pr', value: 'AZURE_ACCESS_TOKEN introuvable (env ou docker/.env)', status: 'off', dim: true }]
+  const { pr, error } = await fetchPullRequest($, remote, branch, token)
+  if (error) return [{ label: 'pr', value: error, status: 'warn', dim: true }]
+  if (!pr) return [{ label: 'pr', value: 'aucune', dim: true }]
+  const { icon, label, status } = stateOf(pr)
+  const href = `https://dev.azure.com/${remote.org}/${encodeURIComponent(remote.project)}/_git/${encodeURIComponent(remote.repo)}/pullrequest/${pr.pullRequestId}`
+  const row: StarboardRow = { label: 'pr', value: `${icon} #${pr.pullRequestId} · ${label}`, status, href }
+  return pr.status === 'active' ? [row, reviewOf(pr.reviewers)] : [row]
+}
+
 export async function describeWorkspace($: Engine, jira: Jira = {}): Promise<StarboardRow[]> {
   const top = await git($, ['rev-parse', '--show-toplevel'])
   if (!top) return [{ value: 'pas un dépôt git', status: 'off', dim: true }]
 
-  const branch = (await git($, ['branch', '--show-current'])) || '(HEAD détachée)'
+  const current = await git($, ['branch', '--show-current'])
+  const branch = current || '(HEAD détachée)'
   const common = await git($, ['rev-parse', '--path-format=absolute', '--git-common-dir'])
   const isLinked = common !== undefined && !common.startsWith(`${top}/`)
   const dirty = await git($, ['status', '--porcelain'])
@@ -81,6 +186,7 @@ export async function describeWorkspace($: Engine, jira: Jira = {}): Promise<Sta
     { label: 'branche', value: branch, status: dirty ? 'warn' : 'ok' },
     { label: 'worktree', value: `${top.split('/').pop()}${isLinked ? ' (lié)' : ''}` },
     ...(await ticketRows($, jira, ticketOf(branch))),
+    ...(current ? await pullRequestRows($, top, current) : []),
   ]
 }
 
