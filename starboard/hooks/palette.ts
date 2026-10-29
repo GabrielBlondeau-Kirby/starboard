@@ -4,7 +4,7 @@ export type Card = { background: string; border: string; title: string }
 
 // Dark inks on every pastel card: the terminal's own text colors are made for its background, not ours.
 export const INK = { text: '#1f2328', dim: '#4b535c', link: '#0a4f96' }
-export const MARK_INK: Record<StarboardStatus, string> = { ok: '#1a7f37', warn: '#9a6700', error: '#cf222e', off: '#6e7781' }
+export const MARK_INK: Record<StarboardStatus, string> = { ok: '#1a7f37', warn: '#9a6700', error: '#cf222e', off: '#59616b' }
 
 const MIN_CONTRAST = 4.5
 
@@ -38,10 +38,10 @@ export const contrast = (a: string, b: string): number => {
 // A pastel background, and a title in a far hue darkened until it reads on it (WCAG AA, 4.5:1).
 export function cardOf(id: string): Card {
   const hue = hueOf(id)
-  const background = hex(hue, 70, 90)
+  const background = hex(hue, 28, 85)
   const titleHue = (hue + 150) % 360
   let lightness = 34
   let title = hex(titleHue, 70, lightness)
   while (contrast(title, background) < MIN_CONTRAST && lightness > 10) title = hex(titleHue, 70, (lightness -= 2))
-  return { background, border: hex(hue, 45, 68), title }
+  return { background, border: hex(hue, 25, 62), title }
 }
