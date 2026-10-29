@@ -43,6 +43,7 @@ declare module 'claude-code' {
     starboard: {
       sections: Record<string, StarboardSection>
       collapsed: Record<string, boolean>
+      layout: string[]
     }
   }
 }
