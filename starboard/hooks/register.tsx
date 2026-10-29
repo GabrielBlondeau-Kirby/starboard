@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { Register } from 'claude-code'
+import type { EngineInterface, Register } from 'claude-code'
 
 import type { StarboardRow, StarboardSection, StarboardStatus } from '../types'
 import { cardOf, INK, MARK_INK } from './palette'
@@ -10,7 +10,7 @@ const collapsed = atom({ plugin: 'starboard', key: 'collapsed' } as const, {})
 // The order the person chose with ▲ ▼, kept across sessions; sections it does not name follow their own `order`.
 const layout = atom({ plugin: 'starboard', key: 'layout' } as const, [])
 const LAYOUT = 'layout'
-// Folded to one line per section (its title and summary), kept across sessions.
+// Folded: the side pane closed, one line above the prompt instead; kept across sessions.
 const compact = atom({ plugin: 'starboard', key: 'compact' } as const, false)
 const COMPACT = 'compact'
 
@@ -34,6 +34,18 @@ export function moveSection(ids: string[], id: string, step: -1 | 1): string[] {
   moved[from] = ids[to] ?? id
   moved[to] = id
   return moved
+}
+
+async function fold($: EngineInterface) {
+  await update($, compact, () => true)
+  await $.store.set(COMPACT, true)
+  await $.ui.close({ id: PANE })
+}
+
+async function unfold($: EngineInterface) {
+  await update($, compact, () => false)
+  await $.store.set(COMPACT, false)
+  await $.ui.open({ id: PANE, title: 'Starboard' })
 }
 
 export const register: Register = on => {
@@ -60,8 +72,9 @@ export const register: Register = on => {
     await $.command.register({ name: 'starboard', description: 'Ouvre le panneau latéral des mods ; /starboard reset rend aux sections leur ordre par défaut' })
     const saved = await $.store.get(LAYOUT)
     if (Array.isArray(saved)) await update($, layout, () => saved.filter((id): id is string => typeof id === 'string'))
-    if ((await $.store.get(COMPACT)) === true) await update($, compact, () => true)
-    void $.ui.open({ id: PANE, title: 'Starboard' })
+    const isFoldedAway = (await $.store.get(COMPACT)) === true
+    if (isFoldedAway) await update($, compact, () => true)
+    if (!isFoldedAway) void $.ui.open({ id: PANE, title: 'Starboard' })
     return next(e)
   })
 
@@ -71,7 +84,7 @@ export const register: Register = on => {
       await $.store.set(LAYOUT, [])
       return { text: 'Sections remises dans leur ordre par défaut.' }
     }
-    await $.ui.open({ id: PANE, title: 'Starboard' })
+    await unfold($)
     return { text: 'Panneau latéral ouvert.' }
   })
 
@@ -84,36 +97,6 @@ export const register: Register = on => {
       await $.store.set(LAYOUT, next)
     }
     const folded = await read($, collapsed)
-    const isCompact = await read($, compact)
-    const toggleCompact = async () => {
-      await update($, compact, value => !value)
-      await $.store.set(COMPACT, !isCompact)
-    }
-    const compactButton = (
-      <Box flexDirection="row" justifyContent="flex-end">
-        <Button key="compact" plain label={isCompact ? 'Déplier le panneau' : 'Panneau compact'} onPress={toggleCompact}>
-          <Text dimColor>{isCompact ? '⇥' : '⇤'}</Text>
-        </Button>
-      </Box>
-    )
-
-    if (isCompact) {
-      return (
-        <Box flexDirection="column">
-          {compactButton}
-          {list.map(section => {
-            const card = cardOf(section.id)
-            return (
-              <Box flexDirection="row" gap={1} backgroundColor={card.background} paddingX={1}>
-                <Text bold color={card.title} wrap="truncate-end">{section.title}</Text>
-                {section.summary && <Text color={INK.dim} wrap="truncate-end">{section.summary}</Text>}
-              </Box>
-            )
-          })}
-        </Box>
-      )
-    }
-
     // Mirrors the desktop app's own sidebar: one rounded card per section, the title with its caret,
     // a summary on the right of the header, each row's value flush right.
     const row = (one: StarboardRow) => {
@@ -129,6 +112,14 @@ export const register: Register = on => {
         </Box>
       )
     }
+
+    const compactButton = (
+      <Box flexDirection="row" justifyContent="flex-end">
+        <Button key="fold" plain label="Rabattre le panneau en une ligne au-dessus du prompt" onPress={() => fold($)}>
+          <Text dimColor>⇤</Text>
+        </Button>
+      </Box>
+    )
 
     return (
       <Box flexDirection="column" gap="sm">
@@ -178,6 +169,29 @@ export const register: Register = on => {
             </Box>
           )
         })}
+      </Box>
+    )
+  })
+
+  // Folded away, the sections live on one line above the prompt: title and summary on each one's pastel.
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    if (e.props.hasSurvey || !(await read($, compact))) return next(e)
+    const { Box, Text, Button } = $.ui.resolve(e)
+    const list = sortSections(await read($, sections), await read($, layout))
+    return (
+      <Box flexDirection="row" gap={1}>
+        {list.map(section => {
+          const card = cardOf(section.id)
+          return (
+            <Box flexDirection="row" gap={1} backgroundColor={card.background} paddingX={1} flexShrink={1}>
+              <Text bold color={card.title} wrap="truncate-end">{section.title}</Text>
+              {section.summary && <Text color={INK.dim} wrap="truncate-end">{section.summary}</Text>}
+            </Box>
+          )
+        })}
+        <Button key="unfold" plain label="Rouvrir le panneau latéral" onPress={() => unfold($)}>
+          <Text dimColor>⇥</Text>
+        </Button>
       </Box>
     )
   })
