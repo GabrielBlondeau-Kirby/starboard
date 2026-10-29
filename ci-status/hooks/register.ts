@@ -1,7 +1,7 @@
 import type { EngineInterface as Engine, Register } from 'claude-code'
 
 // The starboard contract, kept local: the mod does not depend on `starboard`, it only uses it when present.
-type StarboardRow = { label?: string; value: string; status?: 'ok' | 'warn' | 'error' | 'off'; dim?: boolean }
+type StarboardRow = { label?: string; value: string; status?: 'ok' | 'warn' | 'error' | 'off'; dim?: boolean; href?: string }
 type StarboardSection = { id: string; title: string; order?: number; summary?: string; rows: StarboardRow[] }
 type WithStarboard = Engine & {
   starboard: { publish: (section: StarboardSection) => Promise<void>; remove: (id: string) => Promise<void> }
@@ -42,6 +42,9 @@ export function parseRemote(url: string): Remote | undefined {
   }
   return undefined
 }
+
+export const pullRequestUrl = (remote: Remote, id: number): string =>
+  `https://dev.azure.com/${remote.org}/${encodeURIComponent(remote.project)}/_git/${encodeURIComponent(remote.repo)}/pullrequest/${id}`
 
 export const tokenFromEnvFile = (text: string): string | undefined =>
   /^\s*(?:export\s+)?AZURE_ACCESS_TOKEN\s*=\s*["']?([^"'\s#]+)/m.exec(text)?.[1]
@@ -139,7 +142,7 @@ export async function describeCi($: Engine): Promise<Report | undefined> {
       $, auth, remote, `build/builds?branchName=${buildRef}&$top=10&queryOrder=queueTimeDescending`,
     )
     const where = pr ? `PR ${pr}` : branch
-    const prRow: StarboardRow = { label: 'pr', value: pr ? `#${pr}` : 'aucune', dim: !pr }
+    const prRow: StarboardRow = { label: 'pr', value: pr ? `#${pr}` : 'aucune', dim: !pr, href: pr ? pullRequestUrl(remote, pr) : undefined }
     const [latest] = recent
     if (!latest) {
       return { line: `CI ○ ${where} · aucun build`, rows: [prRow, { label: 'build', value: 'aucun', status: 'off', dim: true }] }
@@ -162,12 +165,11 @@ export async function describeCi($: Engine): Promise<Report | undefined> {
         label: b.definition.name,
         value: `${b.status === 'completed' ? (b.result ?? 'terminé') : b.status === 'notStarted' ? 'en attente' : 'en cours'} · ${minutes(b.startTime ?? b.queueTime, b.finishTime)}`,
         status: b.status !== 'completed' ? 'warn' : b.result === 'succeeded' ? 'ok' : b.result === 'partiallySucceeded' ? 'warn' : 'error',
+        href: b._links?.web?.href,
       })),
       ...failed.map((name): StarboardRow => ({ label: 'échec', value: name, status: 'error' })),
       { label: 'commit', value: head.slice(0, 8), dim: true },
     ]
-    const link = main._links?.web?.href
-    if (link) rows.push({ value: link, dim: true })
 
     const line = state === 'running' ? `CI ⏳ ${where} · ${elapsed}`
       : state === 'failed' ? `CI ❌ ${failed.slice(0, 2).join(', ') || where}`

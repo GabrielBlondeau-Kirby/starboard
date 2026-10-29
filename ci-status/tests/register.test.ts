@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { parseRemote, tokenFromEnvFile } from '../hooks/register'
+import { parseRemote, pullRequestUrl, tokenFromEnvFile } from '../hooks/register'
 
 const GIT: Record<string, string> = {
   'rev-parse --show-toplevel': '/repo/shop-PAY-42',
@@ -80,4 +80,9 @@ test('/ci off clears the footer', async ($, on) => {
   await $.command.run({ command: 'ci', args: 'off' })
 
   expect(statuses.at(-1)).toBe(undefined)
+})
+
+test('links a PR to Azure DevOps', () => {
+  expect(pullRequestUrl({ org: 'contoso', project: 'Contoso Payments', repo: 'Shop' }, 1234))
+    .toBe('https://dev.azure.com/contoso/Contoso%20Payments/_git/Shop/pullrequest/1234')
 })

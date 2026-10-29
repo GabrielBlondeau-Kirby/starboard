@@ -14,6 +14,9 @@ const MARKS: Record<StarboardStatus, { mark: string; color: string }> = {
   off: { mark: '○', color: 'inactive' },
 }
 
+// Links stand out from plain values, dimmed or not.
+const LINK = 'suggestion'
+
 export const sortSections = (all: Record<string, StarboardSection>): StarboardSection[] =>
   Object.values(all).sort((a, b) => (a.order ?? 100) - (b.order ?? 100) || a.title.localeCompare(b.title))
 
@@ -63,9 +66,9 @@ export const register: Register = on => {
             {status && <Text color={status.color}>{status.mark}</Text>}
             {one.label && <Text dimColor>{one.label}</Text>}
           </Box>
-          <Text dimColor={one.dim} wrap="truncate-end">
-            {one.href ? <Link href={one.href}>{one.value}</Link> : one.value}
-          </Text>
+          {one.href
+            ? <Text color={LINK} underline wrap="truncate-end"><Link href={one.href}>{one.value}</Link></Text>
+            : <Text dimColor={one.dim} wrap="truncate-end">{one.value}</Text>}
         </Box>
       )
     }
@@ -87,7 +90,19 @@ export const register: Register = on => {
                   <Text weight="semibold">{section.title}</Text>
                   <Text dimColor> {isFolded ? '▸' : '▾'}</Text>
                 </Button>
-                {section.summary && <Text dimColor wrap="truncate-end">{section.summary}</Text>}
+                <Box flexDirection="row" gap={1} flexShrink={1}>
+                  {section.summary && <Text dimColor wrap="truncate-end">{section.summary}</Text>}
+                  {(section.actions ?? []).map(action => (
+                    <Button
+                      key={`action-${section.id}-${action.command}-${action.args ?? ''}`}
+                      plain
+                      label={action.hint}
+                      onPress={() => void $.command.run({ command: action.command, args: action.args ?? '' }).catch(() => {})}
+                    >
+                      <Text color={LINK}>{action.label}</Text>
+                    </Button>
+                  ))}
+                </Box>
               </Box>
               {!isFolded && section.rows.map(row)}
               {!isFolded && section.note && <Text dimColor>{section.note}</Text>}

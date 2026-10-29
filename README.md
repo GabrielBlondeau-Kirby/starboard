@@ -7,9 +7,9 @@ Un panneau latéral pour Claude Code dans lequel d'autres mods publient leur sec
 | --- | --- |
 | `starboard` | L'hôte : ajoute `$.starboard.publish(section)` / `$.starboard.remove(id)`, dessine le panneau, commande `/starboard` |
 | `workspace-info` | Section « Contexte » : branche, worktree, ticket Jira tiré du nom de branche. Avec les options Jira, son titre, son statut et un lien vers le ticket. Sur un dépôt Azure DevOps, la PR de la branche : lien, statut (✅ Completed, 📝 Draft, ⏳ Active) et approbation des relecteurs (PAT `AZURE_ACCESS_TOKEN` en env ou dans `docker/.env`). Sans `starboard`, s'affiche dans le footer |
-| `ci-status` | Section « CI » : état de la CI Azure DevOps de la branche (PR, builds, étapes en échec), `/ci on\|off`. Sans `starboard`, s'affiche dans le footer |
+| `ci-status` | Section « CI » : état de la CI Azure DevOps de la branche (PR et pipelines cliquables, builds, étapes en échec), `/ci on\|off`. Sans `starboard`, s'affiche dans le footer |
 | `navi` | *Hey, listen!* Panneau des sessions Claude Code locales, `/navi` : qui parle à qui, mise en relation par glisser-déposer, `/navi cut` et `cut-all` pour couper. Section « Sessions » dans starboard |
-| `docker-stacks` | Section « Docker » : stacks Compose actives (filtrées par préfixe) et leur mémoire, alerte au-delà d'environ 80 % de la VM Docker, `/docker`. Sans `starboard`, footer en cas d'alerte |
+| `docker-stacks` | Section « Docker » : stacks Compose actives (filtrées par préfixe) et leur mémoire, alerte au-delà d'environ 80 % de la VM Docker, `/docker`. Par défaut, seulement les stacks de la session (lancées depuis son worktree ou nommées d'après sa branche) : `/docker all` ou ☰ pour tout voir, `/docker session` ou ◎ pour revenir. `/docker clean` ou 🧹 arrête (`compose down`, volumes gardés) les stacks dont le worktree n'existe plus. Sans `starboard`, footer en cas d'alerte |
 
 ## Installation
 
