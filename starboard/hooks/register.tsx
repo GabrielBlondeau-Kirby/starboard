@@ -2,20 +2,13 @@ import { atom, read, update } from 'claude-code'
 import type { Register } from 'claude-code'
 
 import type { StarboardRow, StarboardSection, StarboardStatus } from '../types'
+import { cardOf, INK, MARK_INK } from './palette'
 
 const PANE = 'starboard'
 const sections = atom({ plugin: 'starboard', key: 'sections' } as const, {})
 const collapsed = atom({ plugin: 'starboard', key: 'collapsed' } as const, {})
 
-const MARKS: Record<StarboardStatus, { mark: string; color: string }> = {
-  ok: { mark: '●', color: 'success' },
-  warn: { mark: '●', color: 'warning' },
-  error: { mark: '●', color: 'error' },
-  off: { mark: '○', color: 'inactive' },
-}
-
-// Links stand out from plain values, dimmed or not.
-const LINK = 'suggestion'
+const MARKS: Record<StarboardStatus, string> = { ok: '●', warn: '●', error: '●', off: '○' }
 
 export const sortSections = (all: Record<string, StarboardSection>): StarboardSection[] =>
   Object.values(all).sort((a, b) => (a.order ?? 100) - (b.order ?? 100) || a.title.localeCompare(b.title))
@@ -59,16 +52,15 @@ export const register: Register = on => {
     // Mirrors the desktop app's own sidebar: one rounded card per section, the title with its caret,
     // a summary on the right of the header, each row's value flush right.
     const row = (one: StarboardRow) => {
-      const status = one.status && MARKS[one.status]
       return (
         <Box flexDirection="row" justifyContent="space-between" gap={1}>
           <Box flexDirection="row" gap={1} flexShrink={0}>
-            {status && <Text color={status.color}>{status.mark}</Text>}
-            {one.label && <Text dimColor>{one.label}</Text>}
+            {one.status && <Text color={MARK_INK[one.status]}>{MARKS[one.status]}</Text>}
+            {one.label && <Text color={INK.dim}>{one.label}</Text>}
           </Box>
           {one.href
-            ? <Text color={LINK} underline wrap="truncate-end"><Link href={one.href}>{one.value}</Link></Text>
-            : <Text dimColor={one.dim} wrap="truncate-end">{one.value}</Text>}
+            ? <Text color={INK.link} underline wrap="truncate-end"><Link href={one.href}>{one.value}</Link></Text>
+            : <Text color={one.dim ? INK.dim : INK.text} wrap="truncate-end">{one.value}</Text>}
         </Box>
       )
     }
@@ -78,8 +70,9 @@ export const register: Register = on => {
         {list.length === 0 && <Text dimColor>Aucune section publiée pour l'instant.</Text>}
         {list.map(section => {
           const isFolded = folded[section.id] === true
+          const card = cardOf(section.id)
           return (
-            <Box flexDirection="column" borderStyle="round" borderColor="subtle" paddingX={1} gap="xs">
+            <Box flexDirection="column" borderStyle="round" borderColor={card.border} backgroundColor={card.background} paddingX={1} gap="xs">
               <Box flexDirection="row" justifyContent="space-between" gap={1}>
                 <Button
                   key={`toggle-${section.id}`}
@@ -87,11 +80,11 @@ export const register: Register = on => {
                   label={section.title}
                   onPress={() => update($, collapsed, all => ({ ...all, [section.id]: !isFolded }))}
                 >
-                  <Text weight="semibold">{section.title}</Text>
-                  <Text dimColor> {isFolded ? '▸' : '▾'}</Text>
+                  <Text weight="semibold" bold color={card.title}>{section.title}</Text>
+                  <Text color={INK.dim}> {isFolded ? '▸' : '▾'}</Text>
                 </Button>
                 <Box flexDirection="row" gap={1} flexShrink={1}>
-                  {section.summary && <Text dimColor wrap="truncate-end">{section.summary}</Text>}
+                  {section.summary && <Text color={INK.dim} wrap="truncate-end">{section.summary}</Text>}
                   {(section.actions ?? []).map(action => (
                     <Button
                       key={`action-${section.id}-${action.command}-${action.args ?? ''}`}
@@ -99,13 +92,13 @@ export const register: Register = on => {
                       label={action.hint}
                       onPress={() => void $.command.run({ command: action.command, args: action.args ?? '' }).catch(() => {})}
                     >
-                      <Text color={LINK}>{action.label}</Text>
+                      <Text color={INK.link}>{action.label}</Text>
                     </Button>
                   ))}
                 </Box>
               </Box>
               {!isFolded && section.rows.map(row)}
-              {!isFolded && section.note && <Text dimColor>{section.note}</Text>}
+              {!isFolded && section.note && <Text color={INK.dim}>{section.note}</Text>}
             </Box>
           )
         })}

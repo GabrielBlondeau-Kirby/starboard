@@ -5,7 +5,7 @@ Un panneau latéral pour Claude Code dans lequel d'autres mods publient leur sec
 
 | Mod | Rôle |
 | --- | --- |
-| `starboard` | L'hôte : ajoute `$.starboard.publish(section)` / `$.starboard.remove(id)`, dessine le panneau, commande `/starboard` |
+| `starboard` | L'hôte : ajoute `$.starboard.publish(section)` / `$.starboard.remove(id)`, dessine le panneau (une carte pastel par section, couleur tirée de son id, titre contrasté), commande `/starboard` |
 | `workspace-info` | Section « Contexte » : branche, worktree, ticket Jira tiré du nom de branche. Avec les options Jira, son titre, son statut et un lien vers le ticket. Sur un dépôt Azure DevOps, la PR de la branche : lien, statut (✅ Completed, 📝 Draft, ⏳ Active) et approbation des relecteurs (PAT `AZURE_ACCESS_TOKEN` en env ou dans `docker/.env`). Si Claude écrit dans un autre worktree que celui de la session (Edit/Write, `cd`, `git -C`), une ligne ⚠ « travail » le signale, avec ↪ pour y basculer la session (`/cd`) quand ce build l'a. Sans `starboard`, s'affiche dans le footer |
 | `ci-status` | Section « CI » : état de la CI Azure DevOps de la branche (numéro de PR dans le résumé, pipelines cliquables, builds, étapes en échec ; le détail de la PR est dans Contexte), `/ci on\|off`. Sans `starboard`, s'affiche dans le footer |
 | `navi` | *Hey, listen!* Panneau des sessions Claude Code locales, `/navi` : qui parle à qui, mise en relation par glisser-déposer, `/navi cut` et `cut-all` pour couper. Section « Sessions » dans starboard |

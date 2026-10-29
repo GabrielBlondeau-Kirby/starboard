@@ -2,7 +2,7 @@
   "license": "MIT",
   "author": { "name": "Gabriel Blondeau" },
   "name": "starboard",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Panneau latéral qui regroupe les sections publiées par d'autres mods via $.starboard",
   "types": "./types/index.d.ts"
 }
