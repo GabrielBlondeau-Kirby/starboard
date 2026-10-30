@@ -11,6 +11,7 @@ Un panneau latéral pour Claude Code dans lequel d'autres mods publient leur sec
 | `ci-status` | Section « CI » : état de la CI Azure DevOps de la branche (numéro de PR dans le résumé, pipelines cliquables, builds, étapes en échec ; le détail de la PR est dans Contexte), `/ci on\|off`. Sans `starboard`, s'affiche dans le footer |
 | `navi` | *Hey, listen!* Panneau des sessions Claude Code locales, `/navi` : qui parle à qui, mise en relation par glisser-déposer, `/navi cut` et `cut-all` pour couper. Section « Sessions » dans starboard |
 | `docker-stacks` | Section « Docker » : stacks Compose actives (filtrées par préfixe) et leur mémoire, alerte au-delà d'environ 80 % de la VM Docker, `/docker`. Par défaut, seulement les stacks de la session (lancées depuis son worktree ou nommées d'après sa branche) : `/docker all` ou ☰ pour tout voir, `/docker session` ou ◎ pour revenir. `/docker clean` ou 🧹 arrête (`compose down`, volumes gardés) les stacks dont le worktree n'existe plus. Sans `starboard`, footer en cas d'alerte |
+| `pr-radar` | Section « PR » : une ligne d'icônes par PR Azure DevOps dont on est l'auteur (✍️) ou suivie (📌) : statut, approbations, CI, auto-complete 🚀, titre sur 15 caractères. `/prs add <url\|branche>` pour suivre une PR, `/prs rm`, `/prs clean`. Sans `starboard`, s'affiche dans le footer |
 
 ## Installation
 
@@ -23,6 +24,7 @@ Un panneau latéral pour Claude Code dans lequel d'autres mods publient leur sec
 /plugin install ci-status --marketplace GabrielBlondeau-Kirby/starboard
 /plugin install navi --marketplace GabrielBlondeau-Kirby/starboard
 /plugin install docker-stacks --marketplace GabrielBlondeau-Kirby/starboard
+/plugin install pr-radar --marketplace GabrielBlondeau-Kirby/starboard
 ```
 
 Répondre `y` pour ajouter le marketplace, puis choisir la portée. Depuis un shell :

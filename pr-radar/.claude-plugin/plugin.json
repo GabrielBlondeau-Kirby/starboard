@@ -1,0 +1,7 @@
+{
+  "license": "MIT",
+  "author": { "name": "Gabriel Blondeau" },
+  "name": "pr-radar",
+  "version": "0.1.0",
+  "description": "Section PR : ses PR Azure DevOps et celles qu'on suit, en une ligne d'icônes chacune (statut, approbations, CI, auto-complete). /prs add <url|branche>"
+}
