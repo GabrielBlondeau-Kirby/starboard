@@ -7,6 +7,7 @@
     { "name": "tasks", "source": "./tasks", "description": "Section des tâches du projet (TODO.md, docs/A-FAIRE.md…), bandeau de la prochaine tâche, /todo, et tâches ouvertes dans le contexte de Claude" },
     { "name": "ci-status", "source": "./ci-status", "description": "Section CI : état de la CI Azure DevOps de la branche courante, étapes en échec, /ci on|off (footer sans starboard)" },
     { "name": "navi", "source": "./navi", "description": "« Hey, listen! » : panneau des sessions Claude Code locales et mise en relation de deux sessions par glisser-déposer" },
-    { "name": "docker-stacks", "source": "./docker-stacks", "description": "Section Docker : stacks Compose actives (filtre par préfixe) et leur mémoire, alerte au-delà d'environ 80 % de la VM, /docker" }
+    { "name": "docker-stacks", "source": "./docker-stacks", "description": "Section Docker : stacks Compose actives (filtre par préfixe) et leur mémoire, alerte au-delà d'environ 80 % de la VM, /docker" },
+    { "name": "pr-radar", "source": "./pr-radar", "description": "Section PR : ses PR Azure DevOps et celles qu'on suit, une ligne d'icônes chacune (statut, approbations, CI, auto-complete), /prs add" }
   ]
 }
