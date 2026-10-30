@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { cardOf, contrast, hex, hueOf, INK, MARK_INK } from '../hooks/palette'
+import { cardOf, contrast, hex, hueOf, INK, MARK_INK, paletteOf } from '../hooks/palette'
 
 const IDS = ['workspace-info', 'ci-status', 'navi', 'docker-stacks', 'tasks', 'a', 'zz-another-section']
 
@@ -25,4 +25,10 @@ test('every card is pastel and every ink reads on it', () => {
     expect(contrast(INK.dim, background)).toBeGreaterThanOrEqual(4.5)
     for (const ink of Object.values(MARK_INK)) expect(contrast(ink, background)).toBeGreaterThanOrEqual(3)
   }
+})
+
+test('a desktop keeps its own background and theme inks, the terminal its pastel cards', () => {
+  expect(paletteOf('terminal').card('ci-status').background).toBe(cardOf('ci-status').background)
+  expect(paletteOf('desktop').card('ci-status').background).toBeUndefined()
+  expect(paletteOf('desktop').ink.text).toBe('text')
 })
